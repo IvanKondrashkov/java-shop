@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+         http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.1.xsd">
+    <changeSet id="04" author="IvanKondrashkov">
+        <createTable tableName="cart_items">
+            <column name="id" type="bigint" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="quantity" type="integer">
+                <constraints nullable="false"/>
+            </column>
+            <column name="item_id" type="bigint">
+                <constraints nullable="false" foreignKeyName="fk_cart_items_item_id" referencedTableName="items" referencedColumnNames="id"/>
+            </column>
+            <column name="order_id" type="bigint">
+                <constraints nullable="true" foreignKeyName="fk_cart_items_order_id" referencedTableName="orders" referencedColumnNames="id"/>
+            </column>
+        </createTable>
+
+        <createIndex tableName="cart_items" indexName="idx_cart_items_item_id">
+            <column name="item_id"/>
+        </createIndex>
+
+        <createIndex tableName="cart_items" indexName="idx_cart_items_order_id">
+            <column name="order_id"/>
+        </createIndex>
+    </changeSet>
+</databaseChangeLog>
