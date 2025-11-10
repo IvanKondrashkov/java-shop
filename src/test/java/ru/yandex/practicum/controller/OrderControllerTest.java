@@ -2,24 +2,23 @@ package ru.yandex.practicum.controller;
 
 import java.util.Set;
 import java.math.BigDecimal;
-import java.util.Collections;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import ru.yandex.practicum.dto.*;
+import org.springframework.boot.test.autoconfigure.web.reactive.WebFluxTest;
+import org.springframework.test.web.reactive.server.WebTestClient;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
+import ru.yandex.practicum.dto.response.OrderInfo;
 import ru.yandex.practicum.service.OrderService;
-import org.springframework.test.web.servlet.MockMvc;
 import static org.mockito.Mockito.*;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 
-@WebMvcTest(OrderController.class)
+@WebFluxTest(OrderController.class)
 public class OrderControllerTest {
     @Autowired
-    private MockMvc mockMvc;
+    private WebTestClient webTestClient;
     @MockitoBean
     private OrderService orderService;
     private OrderInfo orderInfo;
@@ -28,7 +27,7 @@ public class OrderControllerTest {
     void setUp() {
         orderInfo = OrderInfo.builder()
                 .id(1L)
-                .totalSum(BigDecimal.ZERO)
+                .totalSum(BigDecimal.valueOf(14999.00))
                 .items(Set.of())
                 .build();
     }
@@ -39,44 +38,55 @@ public class OrderControllerTest {
     }
 
     @Test
-    void findById() throws Exception {
-        when(orderService.findById(1L)).thenReturn(orderInfo);
+    void findById() {
+        when(orderService.findById(any())).thenReturn(Mono.just(orderInfo));
 
-        mockMvc.perform(
-                        get("/orders/1")
-                                .param("newOrder", "false"))
-                .andExpect(status().isOk())
-                .andExpect(view().name("order"))
-                .andExpect(model().attributeExists("order"))
-                .andExpect(model().attributeExists("newOrder"));
+        webTestClient.get()
+                .uri(uriBuilder -> uriBuilder
+                        .path("/orders/1")
+                        .queryParam("newOrder", "false").build())
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody(String.class)
+                .value(html -> {
+                    assert html.contains("14999");
+                    assert html.contains("items");
+                    assert html.contains("order");
+                });
 
-        verify(orderService, times(1)).findById(1L);
+        verify(orderService, times(1)).findById(any());
     }
 
     @Test
-    void findAll() throws Exception {
-        when(orderService.findAll()).thenReturn(Collections.singletonList(orderInfo));
+    void findAll() {
+        when(orderService.findAll()).thenReturn(Flux.just(orderInfo));
 
-        mockMvc.perform(
-                        get("/orders"))
-                .andExpect(status().isOk())
-                .andExpect(view().name("orders"))
-                .andExpect(model().attributeExists("orders"));
+        webTestClient.get()
+                .uri("/orders")
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody(String.class)
+                .value(html -> {
+                    assert html.contains("14999");
+                    assert html.contains("items");
+                    assert html.contains("order");
+                    assert html.contains("orders");
+                });
 
         verify(orderService, times(1)).findAll();
     }
 
     @Test
-    void buy() throws Exception {
-        when(orderService.buy()).thenReturn(orderInfo);
+    void buy() {
+        when(orderService.buy()).thenReturn(Mono.just(orderInfo));
 
-        mockMvc.perform(
-                        post("/buy")
-                                .param("newOrder", "false"))
-                .andExpect(status().is3xxRedirection())
-                .andExpect(redirectedUrl(
-                        String.format("/orders/%d?newOrder=true", orderInfo.getId()))
-                );
+        webTestClient.post()
+                .uri(uriBuilder -> uriBuilder
+                        .path("/buy")
+                        .queryParam("newOrder", "false").build())
+                .exchange()
+                .expectStatus().is3xxRedirection()
+                .expectHeader().location("/orders/1?newOrder=true");
 
         verify(orderService, times(1)).buy();
     }

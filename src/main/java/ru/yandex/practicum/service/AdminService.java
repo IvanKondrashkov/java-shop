@@ -1,7 +1,8 @@
 package ru.yandex.practicum.service;
 
-import org.springframework.web.multipart.MultipartFile;
+import reactor.core.publisher.Mono;
+import org.springframework.http.codec.multipart.FilePart;
 
 public interface AdminService {
-    void importCsvFile(MultipartFile file);
+    Mono<Void> importCsvFile(FilePart file);
 }

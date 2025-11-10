@@ -4,15 +4,14 @@ import java.util.List;
 import java.math.BigDecimal;
 import lombok.extern.slf4j.Slf4j;
 import lombok.RequiredArgsConstructor;
-import org.springframework.ui.Model;
+import org.springframework.web.bind.annotation.*;
+import reactor.core.publisher.Mono;
 import ru.yandex.practicum.dto.Action;
-import ru.yandex.practicum.dto.ItemInfo;
+import ru.yandex.practicum.dto.response.ItemInfo;
+import ru.yandex.practicum.dto.request.ActionRequest;
 import ru.yandex.practicum.service.CartItemService;
+import org.springframework.web.reactive.result.view.Rendering;
 import org.springframework.stereotype.Controller;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 
 @Slf4j
 @Controller
@@ -22,31 +21,47 @@ public class CartItemController {
     private final CartItemService cartItemService;
 
     @GetMapping
-    public String findAll(Model model) {
-        List<ItemInfo> items = cartItemService.findAll();
-        BigDecimal total = BigDecimal.valueOf(items.stream()
-                .mapToDouble(it -> it.getPrice().doubleValue() * it.getCount())
-                .sum());
-
-        model.addAttribute("items", items);
-        model.addAttribute("total", total);
-        return "cart";
+    public Mono<Rendering> findAll() {
+        return cartItemService.findAll()
+                .collectList()
+                .flatMap(items -> {
+                    BigDecimal total = items.stream()
+                            .map(item -> item.getPrice().multiply(BigDecimal.valueOf(item.getCount())))
+                            .reduce(BigDecimal.ZERO, BigDecimal::add);
+                    return Mono.just(Rendering.view("cart")
+                            .modelAttribute("items", items)
+                            .modelAttribute("total", total)
+                            .build());
+                });
     }
 
     @PostMapping
-    public String purchaseItem(@RequestParam Long id, @RequestParam Action action, Model model) {
+    public Mono<Rendering> purchaseItem(@ModelAttribute ActionRequest actionRequest) {
+        return getAction(actionRequest.getId(), actionRequest.getAction())
+                .flatMap(items -> {
+                    BigDecimal total = items.stream()
+                            .map(item -> item.getPrice().multiply(BigDecimal.valueOf(item.getCount())))
+                            .reduce(BigDecimal.ZERO, BigDecimal::add);
+                    return Mono.just(Rendering.view("cart")
+                            .modelAttribute("items", items)
+                            .modelAttribute("total", total)
+                            .build());
+                });
+    }
+
+    private Mono<List<ItemInfo>> getAction(Long id, Action action) {
         switch (action) {
-            case PLUS, MINUS -> cartItemService.purchaseItem(id, action);
-            case DELETE -> cartItemService.deleteById(id, action);
+            case PLUS, MINUS -> {
+                return cartItemService.purchaseItem(id, action)
+                        .then(cartItemService.findAll().collectList());
+            }
+            case DELETE -> {
+                return cartItemService.deleteById(id, action)
+                        .then(cartItemService.findAll().collectList());
+            }
+            default -> {
+                return cartItemService.findAll().collectList();
+            }
         }
-
-        List<ItemInfo> items = cartItemService.findAll();
-        BigDecimal total = BigDecimal.valueOf(items.stream()
-                .mapToDouble(it -> it.getPrice().doubleValue() * it.getCount())
-                .sum());
-
-        model.addAttribute("items", items);
-        model.addAttribute("total", total);
-        return "cart";
     }
 }

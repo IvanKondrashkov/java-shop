@@ -3,7 +3,7 @@ package ru.yandex.practicum.service;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import java.io.ByteArrayInputStream;
-import ru.yandex.practicum.dto.ImageInfo;
+import ru.yandex.practicum.dto.response.ImageInfo;
 import org.apache.http.entity.ContentType;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.model.ObjectMetadata;

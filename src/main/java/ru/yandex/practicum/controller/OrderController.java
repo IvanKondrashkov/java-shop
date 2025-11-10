@@ -1,11 +1,11 @@
 package ru.yandex.practicum.controller;
 
-import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Controller;
-import ru.yandex.practicum.dto.*;
-import org.springframework.ui.Model;
+import reactor.core.publisher.Mono;
+import org.springframework.web.reactive.result.view.Rendering;
+import ru.yandex.practicum.dto.request.OrderRequest;
 import ru.yandex.practicum.service.OrderService;
 import org.springframework.web.bind.annotation.*;
 
@@ -16,25 +16,27 @@ public class OrderController {
     private final OrderService orderService;
 
     @GetMapping("orders/{id}")
-    public String findById(@PathVariable Long id, @RequestParam(defaultValue = "false") Boolean newOrder, Model model) {
-        OrderInfo order = orderService.findById(id);
-
-        model.addAttribute("order", order);
-        model.addAttribute("newOrder", newOrder);
-        return "order";
+    public Mono<Rendering> findById(@PathVariable Long id, @ModelAttribute OrderRequest orderRequest) {
+        return orderService.findById(id)
+                .map(order -> Rendering.view("order")
+                        .modelAttribute("order", order)
+                        .modelAttribute("newOrder", orderRequest.getNewOrder())
+                        .build());
     }
 
     @GetMapping("orders")
-    public String findAll(Model model) {
-        List<OrderInfo> orders = orderService.findAll();
-
-        model.addAttribute("orders", orders);
-        return "orders";
+    public Mono<Rendering> findAll() {
+        return orderService.findAll()
+                .collectList()
+                .map(orders -> Rendering.view("orders")
+                        .modelAttribute("orders", orders)
+                        .build());
     }
 
     @PostMapping ("buy")
-    public String buy() {
-        OrderInfo order = orderService.buy();
-        return String.format("redirect:/orders/%d?newOrder=true", order.getId());
+    public Mono<Rendering> buy() {
+        return orderService.buy()
+                .map(order -> String.format("/orders/%d?newOrder=true", order.getId()))
+                .map(url -> Rendering.redirectTo(url).build());
     }
 }

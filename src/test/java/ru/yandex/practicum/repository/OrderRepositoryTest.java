@@ -1,13 +1,12 @@
 package ru.yandex.practicum.repository;
 
-import java.util.Set;
-import java.util.List;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
+import reactor.test.StepVerifier;
 import ru.yandex.practicum.model.Order;
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -21,7 +20,6 @@ public class OrderRepositoryTest extends BaseRepositoryTest {
         order = Order.builder()
                 .totalSum(BigDecimal.ZERO)
                 .createdAt(LocalDateTime.now())
-                .items(Set.of())
                 .build();
     }
 
@@ -29,38 +27,41 @@ public class OrderRepositoryTest extends BaseRepositoryTest {
     void tearDown() {
         order = null;
 
-        orderRepository.deleteAll();
+        orderRepository.deleteAll().block();
     }
 
     @Test
     void findById() {
-        Order orderDb = orderRepository.save(order);
+        Order orderDb = orderRepository.save(order).block();
 
         assertNotNull(orderDb);
         assertNotNull(orderDb.getId());
 
-        orderDb = orderRepository.findById(orderDb.getId()).orElse(null);
-
-        assertNotNull(orderDb);
-        assertNotNull(orderDb.getId());
+        StepVerifier.create(orderRepository.findById(orderDb.getId()))
+                .expectNextMatches(newOrderDb ->
+                        newOrderDb != null &&
+                        newOrderDb.getId() != null &&
+                        newOrderDb.getTotalSum() != null &&
+                        newOrderDb.getCreatedAt() != null
+                )
+                .verifyComplete();
     }
 
     @Test
     void findAll() {
-        Order orderDb = orderRepository.save(order);
+        Order orderDb = orderRepository.save(order).block();
 
         assertNotNull(orderDb);
         assertNotNull(orderDb.getId());
 
-        List<Order> orders = orderRepository.findAll();
-
-        assertNotNull(orders);
-        assertEquals(orders.size(), 1);
+        StepVerifier.create(orderRepository.findAll().collectList())
+                .expectNextMatches(orders -> orders != null && orders.size() == 1)
+                .verifyComplete();
     }
 
     @Test
     void save() {
-        Order orderDb = orderRepository.save(order);
+        Order orderDb = orderRepository.save(order).block();
 
         assertNotNull(orderDb);
         assertNotNull(orderDb.getId());
@@ -68,14 +69,14 @@ public class OrderRepositoryTest extends BaseRepositoryTest {
 
     @Test
     void deleteById() {
-        Order orderDb = orderRepository.save(order);
+        Order orderDb = orderRepository.save(order).block();
 
         assertNotNull(orderDb);
         assertNotNull(orderDb.getId());
 
-        orderRepository.deleteById(orderDb.getId());
-        orderDb = orderRepository.findById(orderDb.getId()).orElse(null);
-
-        assertNull(orderDb);
+        StepVerifier.create(orderRepository.deleteById(orderDb.getId())
+                        .then(orderRepository.findById(orderDb.getId()))
+                )
+                .verifyComplete();
     }
 }

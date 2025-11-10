@@ -1,12 +1,13 @@
 package ru.yandex.practicum.repository;
 
 import java.util.UUID;
-import java.util.List;
+import java.util.Random;
 import java.time.LocalDateTime;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
+import reactor.test.StepVerifier;
 import ru.yandex.practicum.model.Image;
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -29,38 +30,52 @@ public class ImageRepositoryTest extends BaseRepositoryTest {
     void tearDown() {
         image = null;
 
-        imageRepository.deleteAll();
+        imageRepository.deleteAll().block();
     }
 
     @Test
     void findById() {
-        Image imageDb = imageRepository.save(image);
+        Image imageDb = imageRepository.save(image).block();
 
         assertNotNull(imageDb);
         assertNotNull(imageDb.getId());
 
-        imageDb = imageRepository.findById(imageDb.getId()).orElse(null);
-
-        assertNotNull(imageDb);
-        assertNotNull(imageDb.getId());
+        StepVerifier.create(imageRepository.findById(imageDb.getId()))
+                .expectNextMatches(newImageDb ->
+                        newImageDb != null &&
+                        newImageDb.getId() != null &&
+                        newImageDb.getFileName().equals(image.getFileName()) &&
+                        newImageDb.getImageUrl().equals(image.getImageUrl())
+                )
+                .verifyComplete();
     }
 
     @Test
     void findAll() {
-        Image imageDb = imageRepository.save(image);
+        Image imageDb = imageRepository.save(image).block();
 
         assertNotNull(imageDb);
         assertNotNull(imageDb.getId());
 
-        List<Image> images = imageRepository.findAll();
+        StepVerifier.create(imageRepository.findAll().collectList())
+                .expectNextMatches(images -> images != null && images.size() == 1)
+                .verifyComplete();
+    }
 
-        assertNotNull(images);
-        assertEquals(images.size(), 1);
+    @Test
+    void findByItemId() {
+        Image imageDb = imageRepository.save(image).block();
+
+        assertNotNull(imageDb);
+        assertNotNull(imageDb.getId());
+
+        StepVerifier.create(imageRepository.findByItemId(new Random().nextLong()))
+                .verifyComplete();
     }
 
     @Test
     void save() {
-        Image imageDb = imageRepository.save(image);
+        Image imageDb = imageRepository.save(image).block();
 
         assertNotNull(imageDb);
         assertNotNull(imageDb.getId());
@@ -68,14 +83,14 @@ public class ImageRepositoryTest extends BaseRepositoryTest {
 
     @Test
     void deleteById() {
-        Image imageDb = imageRepository.save(image);
+        Image imageDb = imageRepository.save(image).block();
 
         assertNotNull(imageDb);
         assertNotNull(imageDb.getId());
 
-        imageRepository.deleteById(imageDb.getId());
-        imageDb = imageRepository.findById(imageDb.getId()).orElse(null);
-
-        assertNull(imageDb);
+        StepVerifier.create(imageRepository.deleteById(imageDb.getId())
+                        .then(imageRepository.findById(imageDb.getId()))
+                )
+                .verifyComplete();
     }
 }

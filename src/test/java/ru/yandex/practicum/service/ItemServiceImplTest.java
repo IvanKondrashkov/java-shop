@@ -1,97 +1,135 @@
 package ru.yandex.practicum.service;
 
-import java.util.Optional;
+import java.util.UUID;
 import java.math.BigDecimal;
-import java.util.Collections;
+import java.time.LocalDateTime;
 import org.mockito.Mock;
 import org.mockito.InjectMocks;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
+import reactor.test.StepVerifier;
+import ru.yandex.practicum.dto.SortType;
+import ru.yandex.practicum.model.Image;
 import ru.yandex.practicum.model.Item;
-import ru.yandex.practicum.dto.ItemInfo;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.PageRequest;
 import org.mockito.junit.jupiter.MockitoExtension;
+import ru.yandex.practicum.repository.ImageRepository;
 import ru.yandex.practicum.repository.ItemRepository;
 import ru.yandex.practicum.repository.CartItemRepository;
-import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 public class ItemServiceImplTest {
+    @Mock
+    private ImageRepository imageRepository;
     @Mock
     private ItemRepository itemRepository;
     @Mock
     private CartItemRepository cartItemRepository;
     @InjectMocks
     private ItemServiceImpl itemService;
+    private Image image;
     private Item item;
 
 
     @BeforeEach
     void setUp() {
+        String fileName = UUID.randomUUID().toString();
+        image = Image.builder()
+                .id(1L)
+                .fileName(fileName)
+                .imageUrl("https://storage.yandexcloud.net/java-shop-image-storage/" + fileName)
+                .createdAt(LocalDateTime.now())
+                .build();
         item = Item.builder()
                 .id(1L)
                 .title("Внешний SSD Samsung T7")
                 .description("Portable SSD 1ТБ со скоростью передачи до 1050 МБ/с")
                 .price(BigDecimal.valueOf(14999.00))
+                .imageId(image.getId())
                 .build();
     }
 
     @AfterEach
     void tearDown() {
+        image = null;
         item = null;
     }
 
     @Test
     void findById() {
-        when(itemRepository.findById(item.getId())).thenReturn(Optional.of(item));
-        when(cartItemRepository.countByItem_Id(item.getId())).thenReturn(1);
+        when(itemRepository.findById(item.getId())).thenReturn(Mono.just(item));
+        when(imageRepository.findById(item.getImageId())).thenReturn(Mono.just(image));
+        when(cartItemRepository.countByItemId(item.getId())).thenReturn(Mono.just(1));
 
-        ItemInfo itemDb = itemService.findById(item.getId());
-
-        assertNotNull(itemDb);
-        assertEquals(itemDb.getTitle(), item.getTitle());
-        assertEquals(itemDb.getDescription(), item.getDescription());
-        assertEquals(itemDb.getPrice(), item.getPrice());
-        assertEquals(itemDb.getCount(), 1);
+        StepVerifier.create(itemService.findById(item.getId()))
+                .expectNextMatches(newItem ->
+                        newItem != null &&
+                        newItem.getId().equals(item.getId()) &&
+                        newItem.getTitle().equals(item.getTitle()) &&
+                        newItem.getDescription().equals(item.getDescription()) &&
+                        newItem.getPrice().equals(item.getPrice()) &&
+                        newItem.getCount().equals(1)
+                )
+                .verifyComplete();
 
         verify(itemRepository, times(1)).findById(item.getId());
-        verify(cartItemRepository, times(1)).countByItem_Id(item.getId());
+        verify(imageRepository, times(1)).findById(item.getImageId());
+        verify(cartItemRepository, times(1)).countByItemId(item.getId());
     }
 
     @Test
     void findAll() {
-        PageRequest pageRequest = PageRequest.of(1, 5);
+        when(itemRepository.findAll(10, 0, SortType.ID.getValue())).thenReturn(Flux.just(item));
+        when(imageRepository.findById(item.getImageId())).thenReturn(Mono.just(image));
+        when(cartItemRepository.countByItemId(item.getId())).thenReturn(Mono.just(1));
 
-        when(itemRepository.findAll(pageRequest)).thenReturn(new PageImpl<>(Collections.singletonList(item)));
-        when(cartItemRepository.countByItem_Id(item.getId())).thenReturn(1);
+        StepVerifier.create(itemService.findAll(10, 0, SortType.ID.getValue()).collectList())
+                .expectNextMatches(items -> items != null && items.size() == 1)
+                .verifyComplete();
 
-        Page<ItemInfo> page = itemService.findAll(pageRequest);
-
-        assertNotNull(page.getContent());
-        assertEquals(page.getContent().size(), 1);
-
-        verify(itemRepository, times(1)).findAll(pageRequest);
-        verify(cartItemRepository, times(1)).countByItem_Id(item.getId());
+        verify(itemRepository, times(1)).findAll(10, 0, SortType.ID.getValue());
+        verify(imageRepository, times(1)).findById(item.getImageId());
+        verify(cartItemRepository, times(1)).countByItemId(item.getId());
     }
 
     @Test
     void findAllBySearch() {
-        PageRequest pageRequest = PageRequest.of(1, 5);
+        when(itemRepository.findAllBySearch("SSD", "SSD",10, 0, SortType.ID.getValue())).thenReturn(Flux.just(item));
+        when(imageRepository.findById(item.getImageId())).thenReturn(Mono.just(image));
+        when(cartItemRepository.countByItemId(item.getId())).thenReturn(Mono.just(1));
 
-        when(itemRepository.findAllByTitleContainingIgnoreCaseOrDescriptionContainingIgnoreCase("SSD", "SSD", pageRequest)).thenReturn(new PageImpl<>(Collections.singletonList(item)));
-        when(cartItemRepository.countByItem_Id(item.getId())).thenReturn(1);
+        StepVerifier.create(itemService.findAllBySearch("SSD", 10, 0, SortType.ID.getValue()).collectList())
+                .expectNextMatches(items -> items != null && items.size() == 1)
+                .verifyComplete();
 
-        Page<ItemInfo> page = itemService.findAllBySearch("SSD", pageRequest);
+        verify(itemRepository, times(1)).findAllBySearch("SSD", "SSD",10, 0, SortType.ID.getValue());
+        verify(imageRepository, times(1)).findById(item.getImageId());
+        verify(cartItemRepository, times(1)).countByItemId(item.getId());
+    }
 
-        assertNotNull(page.getContent());
-        assertEquals(page.getContent().size(), 1);
+    @Test
+    void count() {
+        when(itemRepository.count()).thenReturn(Mono.just(1L));
 
-        verify(itemRepository, times(1)).findAllByTitleContainingIgnoreCaseOrDescriptionContainingIgnoreCase("SSD", "SSD", pageRequest);
-        verify(cartItemRepository, times(1)).countByItem_Id(item.getId());
+        StepVerifier.create(itemService.count())
+                .expectNext(1L)
+                .verifyComplete();
+
+        verify(itemRepository, times(1)).count();
+    }
+
+    @Test
+    void countBySearch() {
+        when(itemRepository.countBySearch("SSD", "SSD")).thenReturn(Mono.just(1L));
+
+        StepVerifier.create(itemService.countBySearch("SSD"))
+                .expectNext(1L)
+                .verifyComplete();
+
+        verify(itemRepository, times(1)).countBySearch("SSD", "SSD");
     }
 }

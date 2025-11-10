@@ -9,16 +9,19 @@ import java.util.concurrent.ConcurrentHashMap;
 import com.opencsv.bean.HeaderColumnNameMappingStrategy;
 import lombok.extern.slf4j.Slf4j;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.io.buffer.DataBufferUtils;
+import org.springframework.http.codec.multipart.FilePart;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 import ru.yandex.practicum.dto.ItemCsv;
-import ru.yandex.practicum.model.Item;
 import ru.yandex.practicum.model.Image;
 import ru.yandex.practicum.mapper.ItemMapper;
 import ru.yandex.practicum.mapper.ImageMapper;
 import ru.yandex.practicum.repository.ItemRepository;
 import ru.yandex.practicum.repository.ImageRepository;
-import org.springframework.web.multipart.MultipartFile;
 import ru.yandex.practicum.exception.ImportCsvException;
 
 @Slf4j
@@ -32,51 +35,55 @@ public class AdminServiceImpl implements AdminService {
     private final Map<String, Image> imageCache = new ConcurrentHashMap<>();
 
     @Override
-    public void importCsvFile(MultipartFile file) {
-        List<ItemCsv> itemCsvs;
-
-        try (var reader = new BufferedReader(new InputStreamReader(file.getInputStream()))) {
-            HeaderColumnNameMappingStrategy<ItemCsv> strategy = new HeaderColumnNameMappingStrategy<>();
-            strategy.setType(ItemCsv.class);
-
-            CsvToBean<ItemCsv> csvToBean = new CsvToBeanBuilder<ItemCsv>(reader)
-                    .withMappingStrategy(strategy)
-                    .withIgnoreLeadingWhiteSpace(true)
-                    .withIgnoreEmptyLine(true)
-                    .build();
-
-            itemCsvs = csvToBean.parse();
-            log.info("Parsed {} items from CSV file", itemCsvs.size());
-
-        } catch (Exception e) {
-            log.error("Error parsing CSV file: {}", e.getMessage());
-            throw new ImportCsvException(e.getMessage(), e);
-        }
-
-        if (!itemCsvs.isEmpty()) {
-            saveImages(itemCsvs);
-            saveItems(itemCsvs);
-        }
+    public Mono<Void> importCsvFile(FilePart file) {
+        return parseCsvFile(file)
+                .flatMap(this::saveImages)
+                .flatMap(this::saveItems);
     }
 
-    private void saveImages(List<ItemCsv> itemCsvs) {
-        List<Image> images = itemCsvs.stream()
+    private Mono<List<ItemCsv>> parseCsvFile(FilePart file) {
+        return DataBufferUtils.join(file.content())
+                .map(dataBuffer -> {
+                    try (var reader = new BufferedReader(new InputStreamReader(dataBuffer.asInputStream()))) {
+                        HeaderColumnNameMappingStrategy<ItemCsv> strategy = new HeaderColumnNameMappingStrategy<>();
+                        strategy.setType(ItemCsv.class);
+
+                        CsvToBean<ItemCsv> csvToBean = new CsvToBeanBuilder<ItemCsv>(reader)
+                                .withMappingStrategy(strategy)
+                                .withIgnoreLeadingWhiteSpace(true)
+                                .withIgnoreEmptyLine(true)
+                                .build();
+
+                        List<ItemCsv> itemCsvs = csvToBean.parse();
+                        log.info("Parsed {} items from CSV file", itemCsvs.size());
+                        return itemCsvs;
+                    } catch (Exception e) {
+                        log.error("Error parsing CSV file: {}", e.getMessage());
+                        throw new ImportCsvException(e.getMessage(), e);
+                    }
+                });
+    }
+
+    private Mono<List<ItemCsv>> saveImages(List<ItemCsv> itemCsvs) {
+        return Flux.fromIterable(itemCsvs)
                 .map(ItemCsv::getImageBase64)
                 .map(Base64.getDecoder()::decode)
-                .map(it -> s3Service.uploadImage(UUID.nameUUIDFromBytes(it).toString(), it))
-                .map(ImageMapper::imageInfoToImage)
-                .peek(it -> imageCache.put(it.getFileName(), it))
-                .toList();
-
-        imageRepository.saveAll(images);
+                .flatMap(bytes -> {
+                    String fileName = UUID.nameUUIDFromBytes(bytes).toString();
+                    return Mono.fromCallable(() -> s3Service.uploadImage(fileName, bytes))
+                            .subscribeOn(Schedulers.boundedElastic())
+                            .map(ImageMapper::imageInfoToImage);
+                })
+                .doOnNext(image -> imageCache.put(image.getFileName(), image))
+                .collectList()
+                .flatMap(images -> imageRepository.saveAll(images).then(Mono.just(itemCsvs)));
     }
 
-    private void saveItems(List<ItemCsv> itemCsvs) {
-        List<Item> items = itemCsvs.stream()
+    private Mono<Void> saveItems(List<ItemCsv> itemCsvs) {
+        return Flux.fromIterable(itemCsvs)
                 .map(it -> ItemMapper.itemCsvToItem(it, imageCache.get(getFileNameS3(it.getImageBase64()))))
-                .toList();
-
-        itemRepository.saveAll(items);
+                .collectList()
+                .flatMap(items -> itemRepository.saveAll(items).then());
     }
 
     private String getFileNameS3(String imageBase64) {

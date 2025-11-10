@@ -1,7 +1,9 @@
 package ru.yandex.practicum.model;
 
 import lombok.*;
-import jakarta.persistence.*;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.relational.core.mapping.Table;
+import org.springframework.data.relational.core.mapping.Column;
 
 @Setter
 @Getter
@@ -9,18 +11,14 @@ import jakarta.persistence.*;
 @AllArgsConstructor
 @NoArgsConstructor
 @EqualsAndHashCode(of = "id")
-@Entity
 @Table(name = "cart_items")
 public class CartItem {
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-    @Column(nullable = false)
+    @Column
     private Integer quantity;
-    @ManyToOne
-    @JoinColumn(name = "item_id", nullable = false)
-    private Item item;
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "order_id")
-    private Order order;
+    @Column("item_id")
+    private Long itemId;
+    @Column("order_id")
+    private Long orderId;
 }

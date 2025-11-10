@@ -1,12 +1,13 @@
 package ru.yandex.practicum.repository;
 
 import java.util.List;
+import java.util.Random;
 import java.math.BigDecimal;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.transaction.annotation.Transactional;
+import reactor.test.StepVerifier;
 import ru.yandex.practicum.model.Item;
 import ru.yandex.practicum.model.CartItem;
 import static org.junit.jupiter.api.Assertions.*;
@@ -28,10 +29,12 @@ public class CartItemRepositoryTest extends BaseRepositoryTest {
                 .build();
         cartItem = CartItem.builder()
                 .quantity(1)
-                .item(item)
                 .build();
 
-        itemRepository.save(item);
+        itemRepository.save(item)
+                .doOnNext(newItem -> cartItem.setItemId(newItem.getId()))
+                .then(cartItemRepository.save(cartItem))
+                .block();
 
     }
 
@@ -40,65 +43,81 @@ public class CartItemRepositoryTest extends BaseRepositoryTest {
         item = null;
         cartItem = null;
 
-        cartItemRepository.deleteAll();
-        itemRepository.deleteAll();
+        cartItemRepository.deleteAll().block();
+        itemRepository.deleteAll().block();
     }
 
     @Test
     void findById() {
-        CartItem cartItemDb = cartItemRepository.save(cartItem);
+        CartItem cartItemDb = cartItemRepository.save(cartItem).block();
 
         assertNotNull(cartItemDb);
         assertNotNull(cartItemDb.getId());
 
-        cartItemDb = cartItemRepository.findById(cartItemDb.getId()).orElse(null);
-
-        assertNotNull(cartItemDb);
-        assertNotNull(cartItemDb.getId());
+        StepVerifier.create(cartItemRepository.findById(cartItemDb.getId()))
+                .expectNextMatches(newCartItemDb ->
+                        newCartItemDb != null &&
+                        newCartItemDb.getId() != null &&
+                        newCartItemDb.getQuantity().equals(1)
+                )
+                .verifyComplete();
     }
 
     @Test
     void findByItemId() {
-        CartItem cartItemDb = cartItemRepository.save(cartItem);
+        CartItem cartItemDb = cartItemRepository.save(cartItem).block();
 
         assertNotNull(cartItemDb);
         assertNotNull(cartItemDb.getId());
 
-        cartItemDb = cartItemRepository.findByItem_Id(cartItemDb.getItem().getId()).orElse(null);
-
-        assertNotNull(cartItemDb);
-        assertNotNull(cartItemDb.getId());
+        StepVerifier.create(cartItemRepository.findByItemIdAndOrderIdIsNull(cartItemDb.getItemId()))
+                .expectNextMatches(newCartItemDb ->
+                        newCartItemDb != null &&
+                        newCartItemDb.getId() != null &&
+                        newCartItemDb.getQuantity().equals(1)
+                )
+                .verifyComplete();
     }
 
     @Test
     void findAll() {
-        CartItem cartItemDb = cartItemRepository.save(cartItem);
+        CartItem cartItemDb = cartItemRepository.save(cartItem).block();
 
         assertNotNull(cartItemDb);
         assertNotNull(cartItemDb.getId());
 
-        List<CartItem> cartItems = cartItemRepository.findAll();
-
-        assertNotNull(cartItems);
-        assertEquals(cartItems.size(), 1);
+        StepVerifier.create(cartItemRepository.findAll().collectList())
+                .expectNextMatches(cartItems -> cartItems != null && cartItems.size() == 1)
+                .verifyComplete();
     }
 
     @Test
     void findAllByOrderIsNull() {
-        CartItem cartItemDb = cartItemRepository.save(cartItem);
+        CartItem cartItemDb = cartItemRepository.save(cartItem).block();
 
         assertNotNull(cartItemDb);
         assertNotNull(cartItemDb.getId());
 
-        List<CartItem> cartItems = cartItemRepository.findAllByOrderIsNull();
+        StepVerifier.create(cartItemRepository.findAllByOrderIdIsNull().collectList())
+                .expectNextMatches(cartItems -> cartItems != null && cartItems.size() == 1)
+                .verifyComplete();
+    }
 
-        assertNotNull(cartItems);
-        assertEquals(cartItems.size(), 1);
+    @Test
+    void findAllByOrderId() {
+        CartItem cartItemDb = cartItemRepository.save(cartItem).block();
+
+        assertNotNull(cartItemDb);
+        assertNotNull(cartItemDb.getId());
+
+        StepVerifier.create(cartItemRepository.findAllByOrderId(new Random().nextLong()).collectList())
+                .expectNextMatches(List::isEmpty)
+                .verifyComplete();
     }
 
     @Test
     void save() {
-        CartItem cartItemDb = cartItemRepository.save(cartItem);
+        CartItem cartItemDb = cartItemRepository.save(cartItem).block();
 
         assertNotNull(cartItemDb);
         assertNotNull(cartItemDb.getId());
@@ -106,40 +125,39 @@ public class CartItemRepositoryTest extends BaseRepositoryTest {
 
     @Test
     void deleteById() {
-        CartItem cartItemDb = cartItemRepository.save(cartItem);
+        CartItem cartItemDb = cartItemRepository.save(cartItem).block();
 
         assertNotNull(cartItemDb);
         assertNotNull(cartItemDb.getId());
 
-        cartItemRepository.deleteById(cartItemDb.getId());
-        cartItemDb = cartItemRepository.findById(cartItemDb.getId()).orElse(null);
-
-        assertNull(cartItemDb);
+        StepVerifier.create(cartItemRepository.deleteById(cartItemDb.getId())
+                        .then(cartItemRepository.findById(cartItemDb.getId()))
+                )
+                .verifyComplete();
     }
 
     @Test
-    @Transactional
     void deleteByItemId() {
-        CartItem cartItemDb = cartItemRepository.save(cartItem);
+        CartItem cartItemDb = cartItemRepository.save(cartItem).block();
 
         assertNotNull(cartItemDb);
         assertNotNull(cartItemDb.getId());
 
-        cartItemRepository.deleteByItem_Id(cartItemDb.getItem().getId());
-        cartItemDb = cartItemRepository.findById(cartItemDb.getId()).orElse(null);
-
-        assertNull(cartItemDb);
+        StepVerifier.create(cartItemRepository.deleteByItemId(cartItemDb.getItemId())
+                        .then(cartItemRepository.findById(cartItemDb.getId()))
+                )
+                .verifyComplete();
     }
 
     @Test
     void countAllByItemId() {
-        CartItem cartItemDb = cartItemRepository.save(cartItem);
+        CartItem cartItemDb = cartItemRepository.save(cartItem).block();
 
         assertNotNull(cartItemDb);
         assertNotNull(cartItemDb.getId());
 
-        int count = cartItemRepository.countByItem_Id(cartItemDb.getItem().getId());
-
-        assertEquals(count, 1);
+        StepVerifier.create(cartItemRepository.countByItemId(cartItemDb.getItemId()))
+                .expectNext(1)
+                .verifyComplete();
     }
 }

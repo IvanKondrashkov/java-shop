@@ -3,9 +3,9 @@ package ru.yandex.practicum.service;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -38,6 +38,10 @@ public abstract class BaseServiceTest {
         registry.add("aws.bucket-name", () -> "test-bucket");
         registry.add("aws.access-key", localStack::getAccessKey);
         registry.add("aws.secret-key", localStack::getSecretKey);
+
+        registry.add("spring.datasource.url", postgres::getJdbcUrl);
+        registry.add("spring.datasource.username", postgres::getUsername);
+        registry.add("spring.datasource.password", postgres::getPassword);
 
         registry.add("spring.datasource.hikari.maximum-pool-size", () -> "5");
         registry.add("spring.datasource.hikari.connection-timeout", () -> "30000");

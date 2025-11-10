@@ -5,20 +5,18 @@ import java.util.stream.Stream;
 import lombok.extern.slf4j.Slf4j;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
-import org.springframework.data.domain.Page;
+import org.springframework.http.codec.multipart.FilePart;
 import org.springframework.stereotype.Controller;
-import org.springframework.ui.Model;
-import ru.yandex.practicum.dto.Sort;
-import ru.yandex.practicum.dto.Order;
-import ru.yandex.practicum.dto.Action;
-import ru.yandex.practicum.dto.ItemInfo;
+import org.springframework.web.reactive.result.view.Rendering;
+import reactor.core.publisher.Mono;
+import ru.yandex.practicum.dto.*;
+import ru.yandex.practicum.dto.request.ActionRequest;
+import ru.yandex.practicum.dto.request.PageRequest;
+import ru.yandex.practicum.dto.response.ItemInfo;
 import ru.yandex.practicum.service.ItemService;
 import ru.yandex.practicum.service.AdminService;
 import ru.yandex.practicum.service.CartItemService;
-import org.springframework.web.multipart.MultipartFile;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.web.bind.annotation.*;
-import static org.springframework.data.domain.Sort.by;
 
 @Slf4j
 @Controller
@@ -29,80 +27,79 @@ public class ItemController {
     private final AdminService adminService;
 
     @GetMapping("/")
-    public String redirectToItems() {
-        return "redirect:/items";
+    public Mono<Rendering> redirectToItems() {
+        return Mono.just(Rendering.redirectTo("/items").build());
     }
 
     @GetMapping("items/{id}")
-    public String findById(@PathVariable Long id, Model model) {
-        ItemInfo itemInfo = itemService.findById(id);
-        model.addAttribute("item", itemInfo);
-        return "item";
+    public Mono<Rendering> findById(@PathVariable Long id) {
+        return itemService.findById(id)
+                .map(item -> Rendering.view("item")
+                        .modelAttribute("item", item)
+                        .build());
     }
 
     @GetMapping("items")
-    public String findAll(
-            @RequestParam(defaultValue = "") String search,
-            @RequestParam(defaultValue = "NO") Sort sort,
-            @RequestParam(defaultValue = "DESC") Order order,
-            @RequestParam(defaultValue = "1") Integer pageNumber,
-            @RequestParam(defaultValue = "5") Integer pageSize,
-            Model model)
-    {
+    public Mono<Rendering> findAll(@ModelAttribute PageRequest pageRequest) {
+        String search = pageRequest.getSearch();
+        Integer pageNumber = pageRequest.getPageNumber();
+        Integer pageSize = pageRequest.getPageSize();
+        Integer offset = (pageNumber - 1) * pageSize;
+        SortType sortType = pageRequest.getSort();
+        OrderType orderType = pageRequest.getOrder();
 
-        PageRequest pageRequest = sort == Sort.NO ?
-                PageRequest.of(pageNumber, pageSize) :
-                PageRequest.of(pageNumber, pageSize, by(order.name(), sort.getValue()));
+        String sort = sortType == SortType.NO ? SortType.ID.getValue() : sortType.getValue();
 
-        Page<ItemInfo> paging = search.isEmpty() ?
-                itemService.findAll(pageRequest) :
-                itemService.findAllBySearch(search, pageRequest);
+        var page = search.isEmpty() ?
+                itemService.findAll(pageSize, offset, sort)
+                        .collectList()
+                        .zipWith(itemService.count()) :
+                itemService.findAllBySearch(search, pageSize, offset, sort)
+                        .collectList()
+                        .zipWith(itemService.countBySearch(search));
 
-        List<List<ItemInfo>> items = Stream.iterate(0, i -> i < paging.getContent().size(), i -> i + 3)
-                .map(i -> paging.getContent().subList(i, Math.min(i + 3, paging.getContent().size())))
-                .toList();
+        return page.map(tuple -> {
+            Boolean hasNext = (offset + pageSize) < tuple.getT2();
+            Boolean hasPrevious = pageNumber > 1;
 
-        model.addAttribute("sort", sort);
-        model.addAttribute("order", order);
-        model.addAttribute("items", items);
-        model.addAttribute("paging", paging);
-        model.addAttribute("search", search);
-        return "items";
+            Page paging = new Page(pageNumber, pageSize, offset, hasNext, hasPrevious);
+            List<List<ItemInfo>> items = Stream.iterate(0, i -> i < tuple.getT1().size(), i -> i + 3)
+                    .map(i -> tuple.getT1().subList(i, Math.min(i + 3, tuple.getT1().size())))
+                    .toList();
+
+            return Rendering.view("items")
+                    .modelAttribute("sort", sortType)
+                    .modelAttribute("order", orderType)
+                    .modelAttribute("items", items)
+                    .modelAttribute("paging", paging)
+                    .modelAttribute("search", search)
+                    .build();
+        });
     }
 
     @PostMapping("items/{id}")
-    public String purchaseItemById(@PathVariable Long id, @RequestParam Action action, Model model) {
-        ItemInfo itemInfo = cartItemService.purchaseItem(id, action);
-        model.addAttribute("item", itemInfo);
-        return "item";
+    public Mono<Rendering> purchaseItemById(@PathVariable Long id, @ModelAttribute ActionRequest actionRequest) {
+        return cartItemService.purchaseItem(id, actionRequest.getAction())
+                .map(item -> Rendering.view("item")
+                        .modelAttribute("item", item)
+                        .build());
     }
 
     @PostMapping("items")
-    public String purchaseItem(
-            @RequestParam Long id,
-            @RequestParam(defaultValue = "") String search,
-            @RequestParam(defaultValue = "NO") Sort sort,
-            @RequestParam(defaultValue = "DESC") Order order,
-            @RequestParam(defaultValue = "1") Integer pageNumber,
-            @RequestParam(defaultValue = "5") Integer pageSize,
-            @RequestParam Action action)
-    {
-        cartItemService.purchaseItem(id, action);
-        return String.format("redirect:/items?search=%s&sort=%s&order=%s&pageNumber=%d&pageSize=%d",
-                search, sort.name(), order.name(), pageNumber, pageSize);
+    public Mono<Rendering> purchaseItem(@ModelAttribute ActionRequest actionRequest, @ModelAttribute PageRequest pageRequest) {
+        return cartItemService.purchaseItem(actionRequest.getId(), actionRequest.getAction())
+                .thenReturn(String.format("/items?search=%s&sort=%s&order=%s&pageNumber=%d&pageSize=%d",
+                        pageRequest.getSearch(), pageRequest.getSort(), pageRequest.getOrder(), pageRequest.getPageNumber(), pageRequest.getPageSize()
+                ))
+                .map(url -> Rendering.redirectTo(url).build());
     }
 
     @PostMapping(value = "items/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public String importCsvFile(
-            @RequestParam(defaultValue = "") String search,
-            @RequestParam(defaultValue = "NO") Sort sort,
-            @RequestParam(defaultValue = "DESC") Order order,
-            @RequestParam(defaultValue = "1") Integer pageNumber,
-            @RequestParam(defaultValue = "5") Integer pageSize,
-            @RequestParam MultipartFile file)
-    {
-        adminService.importCsvFile(file);
-        return String.format("redirect:/items?search=%s&sort=%s&order=%s&pageNumber=%d&pageSize=%d",
-                search, sort.name(), order.name(), pageNumber, pageSize);
+    public Mono<Rendering> importCsvFile(@RequestPart FilePart file, @ModelAttribute PageRequest pageRequest) {
+        return adminService.importCsvFile(file)
+                .thenReturn(String.format("/items?search=%s&sort=%s&order=%s&pageNumber=%d&pageSize=%d",
+                        pageRequest.getSearch(), pageRequest.getSort(), pageRequest.getOrder(), pageRequest.getPageNumber(), pageRequest.getPageSize()
+                ))
+                .map(url -> Rendering.redirectTo(url).build());
     }
 }
