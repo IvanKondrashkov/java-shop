@@ -1,0 +1,48 @@
+services:
+  shop-db:
+    image: postgres:14-alpine
+    container_name: shop-db-ct
+    volumes:
+      - postgres_home:/var/lib/postgresql/data/
+    ports:
+      - 5432:5432
+    environment:
+      - POSTGRES_DB=shop
+      - POSTGRES_USER=root
+      - POSTGRES_PASSWORD=root
+    networks:
+      - shop-network
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U root -d shop" ]
+      interval: 10s
+      timeout: 2s
+      retries: 2
+
+  shop-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: shop-app
+    container_name: shop-app-ct
+    ports:
+      - 8080:8080
+    depends_on:
+      - shop-db
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://shop-db:5432/shop
+      - SPRING_DATASOURCE_USERNAME=root
+      - SPRING_DATASOURCE_PASSWORD=root
+      - AWS_REGION=${AWS_REGION}
+      - AWS_SERVICE_ENDPOINT=${AWS_SERVICE_ENDPOINT}
+      - AWS_BUCKET_NAME=${AWS_BUCKET_NAME}
+      - AWS_ACCESS_KEY=${AWS_ACCESS_KEY}
+      - AWS_SECRET_KEY=${AWS_SECRET_KEY}
+    networks:
+      - shop-network
+
+volumes:
+  postgres_home:
+
+networks:
+  shop-network:
+    driver: bridge
