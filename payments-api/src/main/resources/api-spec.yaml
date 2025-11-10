@@ -1,0 +1,185 @@
+openapi: 3.0.3
+info:
+  title: Payment Service API
+  description: API для интеграции с сервисом платежей
+  version: 1.0.0
+servers:
+  - url: http://localhost:8081
+    description: Сервер платежей
+
+tags:
+  - name: payments
+    description: Операции с платежами
+  - name: balance
+    description: Операции с балансом
+
+paths:
+  /balance/{userId}:
+    get:
+      tags:
+        - balance
+      summary: Получение баланса пользователя
+      description: Возвращает текущий баланс пользователя для проверки возможности оформления заказа
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+          description: id пользователя
+      responses:
+        '200':
+          description: Баланс успешно получен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BalanceResponse'
+        '400':
+          description: Неверный запрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Пользователь не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /payments/process:
+    post:
+      tags:
+        - payments
+      summary: Обработка платежа
+      description: Выполняет списание суммы заказа с баланса пользователя
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentRequest'
+      responses:
+        '200':
+          description: Платеж успешно обработан
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentResponse'
+        '400':
+          description: Неверный запрос
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '402':
+          description: Недостаточно средств
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Пользователь не найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Внутренняя ошибка сервера
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    PaymentRequest:
+      type: object
+      required:
+        - userId
+        - amount
+      properties:
+        userId:
+          type: integer
+          format: int64
+          description: id пользователя
+        amount:
+          type: string
+          format: decimal
+          minimum: 0.01
+          description: Сумма к списанию
+        currency:
+          type: string
+          description: Валюта платежа
+          default: "RUB"
+          example: "RUB"
+
+    BalanceResponse:
+      type: object
+      properties:
+        userId:
+          type: integer
+          format: int64
+          description: id пользователя
+        balance:
+          type: string
+          format: decimal
+          minimum: 0
+          description: Текущий баланс пользователя
+        currency:
+          type: string
+          description: Валюта баланса
+          default: "RUB"
+          example: "RUB"
+
+    PaymentResponse:
+      type: object
+      properties:
+        paymentId:
+          type: integer
+          format: int64
+          description: id платежа
+        userId:
+          type: integer
+          format: int64
+          description: id пользователя
+        amount:
+          type: string
+          format: decimal
+          description: Сумма платежа
+        currency:
+          type: string
+          description: Валюта платежа
+        status:
+          type: string
+          enum: [SUCCESS, FAILED, PENDING]
+          description: Статус платежа
+        timestamp:
+          type: string
+          format: date-time
+          description: Время обработки платежа
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Cообщение об ошибке
+        statusCode:
+          type: integer
+          description: Код ошибки
+
+  responses:
+    ServiceUnavailable:
+      description: Сервис временно недоступен
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
