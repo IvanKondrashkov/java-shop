@@ -4,6 +4,7 @@ services:
     container_name: shop-db-ct
     volumes:
       - postgres_home:/var/lib/postgresql/data/
+      - ./db/migrations:/docker-entrypoint-initdb.d/
     ports:
       - 5432:5432
     environment:
@@ -18,23 +19,42 @@ services:
       timeout: 2s
       retries: 2
 
+  shop-redis:
+    image: bitnami/redis:7.2
+    container_name: redis-ct
+    ports:
+      - 6379:6379
+    volumes:
+      - redis_data:/bitnami/redis/data
+    environment:
+      - ALLOW_EMPTY_PASSWORD=yes
+    networks:
+      - shop-network
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
   shop-api:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: shop-api/Dockerfile
     image: shop-app
     container_name: shop-app-ct
     ports:
       - 8080:8080
     depends_on:
       - shop-db
+      - shop-redis
     environment:
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://shop-db:5432/shop
-      - SPRING_DATASOURCE_USERNAME=root
-      - SPRING_DATASOURCE_PASSWORD=root
+      - PAYMENTS_API_URL=http://payments-api:8081
       - SPRING_R2DBC_URL=r2dbc:postgresql://shop-db:5432/shop
       - SPRING_R2DBC_USERNAME=root
       - SPRING_R2DBC_PASSWORD=root
+      - SPRING_DATA_REDIS_HOST=shop-redis
+      - SPRING_DATA_REDIS_PORT=6379
       - AWS_REGION=${AWS_REGION}
       - AWS_SERVICE_ENDPOINT=${AWS_SERVICE_ENDPOINT}
       - AWS_BUCKET_NAME=${AWS_BUCKET_NAME}
@@ -43,8 +63,28 @@ services:
     networks:
       - shop-network
 
+  payments-api:
+    build:
+      context: .
+      dockerfile: payments-api/Dockerfile
+    image: payments-app
+    container_name: payments-app-ct
+    ports:
+      - 8081:8081
+    depends_on:
+      - shop-api
+    environment:
+      - SPRING_R2DBC_URL=r2dbc:postgresql://shop-db:5432/shop
+      - SPRING_R2DBC_USERNAME=root
+      - SPRING_R2DBC_PASSWORD=root
+      - SPRING_DATA_REDIS_HOST=shop-redis
+      - SPRING_DATA_REDIS_PORT=6379
+    networks:
+      - shop-network
+
 volumes:
   postgres_home:
+  redis_data:
 
 networks:
   shop-network:
