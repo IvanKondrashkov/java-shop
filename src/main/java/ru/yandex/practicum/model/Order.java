@@ -1,11 +1,11 @@
 package ru.yandex.practicum.model;
 
 import lombok.*;
-import java.util.Set;
-import java.util.HashSet;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import jakarta.persistence.*;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.relational.core.mapping.Table;
+import org.springframework.data.relational.core.mapping.Column;
 
 @Setter
 @Getter
@@ -13,17 +13,12 @@ import jakarta.persistence.*;
 @AllArgsConstructor
 @NoArgsConstructor
 @EqualsAndHashCode(of = "id")
-@Entity
 @Table(name = "orders")
 public class Order {
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-    @Column(name = "total_sum", nullable = false)
+    @Column("total_sum")
     private BigDecimal totalSum;
-    @Column(name = "created_at", nullable = false)
+    @Column("created_at")
     private LocalDateTime createdAt;
-    @OneToMany(fetch = FetchType.LAZY, mappedBy = "order", cascade = CascadeType.ALL)
-    @Builder.Default
-    private Set<CartItem> items = new HashSet<>();
 }

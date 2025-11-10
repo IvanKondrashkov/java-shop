@@ -1,8 +1,10 @@
 package ru.yandex.practicum.model;
 
 import lombok.*;
-import jakarta.persistence.*;
 import java.math.BigDecimal;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.relational.core.mapping.Table;
+import org.springframework.data.relational.core.mapping.Column;
 
 @Setter
 @Getter
@@ -10,19 +12,16 @@ import java.math.BigDecimal;
 @AllArgsConstructor
 @NoArgsConstructor
 @EqualsAndHashCode(of = "id")
-@Entity
 @Table(name = "items")
 public class Item {
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-    @Column(nullable = false)
+    @Column
     private String title;
-    @Column(nullable = false)
+    @Column
     private String description;
-    @Column(nullable = false)
+    @Column
     private BigDecimal price;
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "image_id")
-    private Image image;
+    @Column("image_id")
+    private Long imageId;
 }

@@ -1,11 +1,11 @@
 package ru.yandex.practicum.service;
 
-import java.util.List;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import ru.yandex.practicum.model.Order;
-import ru.yandex.practicum.dto.OrderInfo;
+import ru.yandex.practicum.dto.response.OrderInfo;
 import ru.yandex.practicum.mapper.OrderMapper;
 import ru.yandex.practicum.repository.OrderRepository;
 import ru.yandex.practicum.exception.EntityNotFoundException;
@@ -19,23 +19,29 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     @Transactional(readOnly = true)
-    public OrderInfo findById(Long id) {
-        Order order = orderRepository.findById(id).orElseThrow(
-                () -> new EntityNotFoundException("Order not found!")
-        );
-        return OrderMapper.orderToOrderInfo(order);
+    public Mono<OrderInfo> findById(Long id) {
+        return orderRepository.findById(id)
+                .switchIfEmpty(Mono.error(new EntityNotFoundException("Order not found!")))
+                .flatMap(it ->
+                        cartItemService.findAllByOrderId(it.getId())
+                                .collectList()
+                                .map(cartItems -> OrderMapper.orderToOrderInfo(it, cartItems))
+                );
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<OrderInfo> findAll() {
-        return orderRepository.findAll().stream()
-                .map(OrderMapper::orderToOrderInfo)
-                .toList();
+    public Flux<OrderInfo> findAll() {
+        return orderRepository.findAll()
+                .flatMap(it ->
+                        cartItemService.findAllByOrderId(it.getId())
+                                .collectList()
+                                .map(cartItems -> OrderMapper.orderToOrderInfo(it, cartItems))
+                );
     }
 
     @Override
-    public OrderInfo buy() {
+    public Mono<OrderInfo> buy() {
         return cartItemService.purchaseOrder();
     }
 }

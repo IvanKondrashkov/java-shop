@@ -1,32 +1,31 @@
 package ru.yandex.practicum.controller;
 
 import java.util.UUID;
-import java.nio.file.Files;
 import java.math.BigDecimal;
-import java.util.Collections;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.core.io.ClassPathResource;
-import org.springframework.data.domain.PageImpl;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.http.client.MultipartBodyBuilder;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.boot.test.autoconfigure.web.reactive.WebFluxTest;
+import org.springframework.test.web.reactive.server.WebTestClient;
+import org.springframework.web.reactive.function.BodyInserters;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 import ru.yandex.practicum.dto.*;
-import org.springframework.http.MediaType;
-import org.springframework.test.web.servlet.MockMvc;
+import ru.yandex.practicum.dto.response.ImageInfo;
+import ru.yandex.practicum.dto.response.ItemInfo;
 import ru.yandex.practicum.service.ItemService;
 import ru.yandex.practicum.service.AdminService;
 import ru.yandex.practicum.service.CartItemService;
 import static org.mockito.Mockito.*;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 
-@WebMvcTest(ItemController.class)
+@WebFluxTest(ItemController.class)
 class ItemControllerTest {
     @Autowired
-    private MockMvc mockMvc;
+    private WebTestClient webTestClient;
     @MockitoBean
     private ItemService itemService;
     @MockitoBean
@@ -60,102 +59,138 @@ class ItemControllerTest {
     }
 
     @Test
-    void redirectToItems() throws Exception {
-        mockMvc.perform(
-                get("/"))
-                .andExpect(status().is3xxRedirection())
-                .andExpect(redirectedUrl("/items"));
+    void redirectToItems() {
+        webTestClient.get()
+                .uri("/")
+                .exchange()
+                .expectStatus().is3xxRedirection()
+                .expectHeader().location("/items");
     }
 
     @Test
-    void findById() throws Exception {
-        when(itemService.findById(1L)).thenReturn(itemInfo);
+    void findById() {
+        when(itemService.findById(any())).thenReturn(Mono.just(itemInfo));
 
-        mockMvc.perform(
-                get("/items/1"))
-                .andExpect(status().isOk())
-                .andExpect(view().name("item"))
-                .andExpect(model().attributeExists("item"));
+        webTestClient.get()
+                .uri("/items/1")
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody(String.class)
+                .value(html -> {
+                    assert html.contains("Samsung T7");
+                    assert html.contains("14999");
+                    assert html.contains("1ТБ");
+                    assert html.contains("1050 МБ/с");
+                    assert html.contains("item");
+                });
 
-        verify(itemService, times(1)).findById(1L);
+        verify(itemService, times(1)).findById(any());
     }
 
     @Test
-    void findAll() throws Exception {
-        when(itemService.findAll(any())).thenReturn(new PageImpl<>(Collections.singletonList(itemInfo)));
+    void findAll() {
+        when(itemService.findAll(any(), any(), any())).thenReturn(Flux.just(itemInfo));
+        when(itemService.count()).thenReturn(Mono.just(1L));
 
-        mockMvc.perform(
-                get("/items"))
-                .andExpect(status().isOk())
-                .andExpect(view().name("items"))
-                .andExpect(model().attributeExists("items"))
-                .andExpect(model().attributeExists("paging"));
+        webTestClient.get()
+                .uri("/items")
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody(String.class)
+                .value(html -> {
+                    assert html.contains("Samsung T7");
+                    assert html.contains("14999");
+                    assert html.contains("1ТБ");
+                    assert html.contains("1050 МБ/с");
+                    assert html.contains("item");
+                    assert html.contains("items");
+                });
 
-        verify(itemService, times(1)).findAll(any());
+        verify(itemService, times(1)).findAll(any(), any(), any());
+        verify(itemService, times(1)).count();
     }
 
     @Test
-    void findAllBySearch() throws Exception {
-        when(itemService.findAllBySearch(anyString(), any())).thenReturn(new PageImpl<>(Collections.singletonList(itemInfo)));
+    void findAllBySearch() {
+        when(itemService.findAllBySearch(anyString(), any(), any(), any())).thenReturn(Flux.just(itemInfo));
+        when(itemService.countBySearch(anyString())).thenReturn(Mono.just(1L));
 
-        mockMvc.perform(
-                get("/items")
-                        .param("search", "SSD"))
-                .andExpect(status().isOk())
-                .andExpect(view().name("items"))
-                .andExpect(model().attributeExists("items"))
-                .andExpect(model().attributeExists("paging"))
-                .andExpect(model().attributeExists("search"));
+        webTestClient.get()
+                .uri(uriBuilder -> uriBuilder
+                        .path("/items")
+                        .queryParam("search", "SSD")
+                        .build())
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody(String.class)
+                .value(html -> {
+                    assert html.contains("Samsung T7");
+                    assert html.contains("14999");
+                    assert html.contains("1ТБ");
+                    assert html.contains("1050 МБ/с");
+                    assert html.contains("item");
+                    assert html.contains("items");
+                });
 
-        verify(itemService, times(1)).findAllBySearch(anyString(), any());
+        verify(itemService, times(1)).findAllBySearch(anyString(), any(), any(), any());
+        verify(itemService, times(1)).countBySearch(anyString());
     }
 
     @Test
-    void purchaseItemById() throws Exception {
-        when(cartItemService.purchaseItem(any(), any())).thenReturn(itemInfo);
+    void purchaseItemById() {
+        when(cartItemService.purchaseItem(any(), any())).thenReturn(Mono.just(itemInfo));
 
-        mockMvc.perform(
-                        post("/items/1")
-                                .param("action", Action.PLUS.name()))
-                .andExpect(status().isOk())
-                .andExpect(view().name("item"))
-                .andExpect(model().attributeExists("item"));
+        webTestClient.post()
+                .uri(uriBuilder -> uriBuilder
+                        .path("/items/1")
+                        .queryParam("action", Action.PLUS.name())
+                        .build())
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody(String.class)
+                .value(html -> {
+                    assert html.contains("Samsung T7");
+                    assert html.contains("14999");
+                    assert html.contains("1ТБ");
+                    assert html.contains("1050 МБ/с");
+                    assert html.contains("item");
+                });
 
         verify(cartItemService, times(1)).purchaseItem(any(), any());
     }
 
     @Test
-    void purchaseItem() throws Exception {
-        when(cartItemService.purchaseItem(any(), any())).thenReturn(itemInfo);
+    void purchaseItem() {
+        when(cartItemService.purchaseItem(any(), any())).thenReturn(Mono.just(itemInfo));
 
-        mockMvc.perform(
-                post("/items")
-                        .param("id", "1")
-                        .param("action", Action.PLUS.name()))
-                .andExpect(status().is3xxRedirection())
-                .andExpect(redirectedUrl(
-                        String.format("/items?search=%s&sort=%s&order=%s&pageNumber=%d&pageSize=%d", "", Sort.NO, Order.DESC, 1, 5))
-                );
+        webTestClient.post()
+                .uri(uriBuilder -> uriBuilder
+                        .path("/items")
+                        .queryParam("id", "1")
+                        .queryParam("action", Action.PLUS.name())
+                        .build())
+                .exchange()
+                .expectStatus().is3xxRedirection()
+                .expectHeader().location(String.format("/items?search=%s&sort=%s&order=%s&pageNumber=%d&pageSize=%d", "", SortType.NO, OrderType.DESC, 1, 5));
 
         verify(cartItemService, times(1)).purchaseItem(any(), any());
     }
 
     @Test
-    void importCsvFile() throws Exception {
-        ClassPathResource resource = new ClassPathResource("static/items.csv");
-        byte[] bytes = Files.readAllBytes(resource.getFile().toPath());
+    void importCsvFile() {
+        MultipartBodyBuilder builder = new MultipartBodyBuilder();
+        builder.part("file", new ClassPathResource("static/items.csv"))
+                .filename("items.csv");
 
-        MockMultipartFile file = new MockMultipartFile("file", bytes);
+        when(adminService.importCsvFile(any())).thenReturn(Mono.empty());
 
-        mockMvc.perform(
-                        multipart("/items/upload")
-                                .file(file)
-                                .contentType(MediaType.MULTIPART_FORM_DATA))
-                .andExpect(status().is3xxRedirection())
-                .andExpect(redirectedUrl(
-                        String.format("/items?search=%s&sort=%s&order=%s&pageNumber=%d&pageSize=%d", "", Sort.NO, Order.DESC, 1, 5))
-                );
+        webTestClient.post()
+                .uri("/items/upload")
+                .body(BodyInserters.fromMultipartData(builder.build()))
+                .exchange()
+                .expectStatus().is3xxRedirection()
+                .expectHeader().location(String.format("/items?search=%s&sort=%s&order=%s&pageNumber=%d&pageSize=%d", "", SortType.NO, OrderType.DESC, 1, 5));
 
-        verify(adminService, times(1)).importCsvFile(file);
+        verify(adminService, times(1)).importCsvFile(any());
     }
 }

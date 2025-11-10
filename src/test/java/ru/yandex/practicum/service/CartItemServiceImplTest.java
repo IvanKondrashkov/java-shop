@@ -1,10 +1,7 @@
 package ru.yandex.practicum.service;
 
-import java.util.Set;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 import java.math.BigDecimal;
-import java.util.Collections;
 import java.time.LocalDateTime;
 import org.mockito.Mock;
 import org.mockito.InjectMocks;
@@ -12,21 +9,25 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
+import reactor.test.StepVerifier;
 import ru.yandex.practicum.dto.Action;
-import ru.yandex.practicum.dto.ItemInfo;
-import ru.yandex.practicum.dto.OrderInfo;
+import ru.yandex.practicum.model.Image;
 import ru.yandex.practicum.model.Item;
 import ru.yandex.practicum.model.Order;
 import ru.yandex.practicum.model.CartItem;
+import ru.yandex.practicum.repository.ImageRepository;
 import ru.yandex.practicum.repository.ItemRepository;
 import ru.yandex.practicum.repository.CartItemRepository;
 import ru.yandex.practicum.repository.OrderRepository;
 import org.mockito.junit.jupiter.MockitoExtension;
-import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 public class CartItemServiceImplTest {
+    @Mock
+    private ImageRepository imageRepository;
     @Mock
     private ItemRepository itemRepository;
     @Mock
@@ -35,98 +36,140 @@ public class CartItemServiceImplTest {
     private OrderRepository orderRepository;
     @InjectMocks
     private CartItemServiceImpl cartItemService;
+    private Image image;
     private Item item;
-    private CartItem cartItem;
     private Order order;
+    private CartItem cartItem;
 
 
 
     @BeforeEach
     void setUp() {
+        String fileName = UUID.randomUUID().toString();
+        image = Image.builder()
+                .id(1L)
+                .fileName(fileName)
+                .imageUrl("https://storage.yandexcloud.net/java-shop-image-storage/" + fileName)
+                .createdAt(LocalDateTime.now())
+                .build();
         item = Item.builder()
                 .id(1L)
                 .title("Внешний SSD Samsung T7")
                 .description("Portable SSD 1ТБ со скоростью передачи до 1050 МБ/с")
                 .price(BigDecimal.valueOf(14999.00))
-                .build();
-        cartItem = CartItem.builder()
-                .id(1L)
-                .quantity(1)
-                .item(item)
+                .imageId(image.getId())
                 .build();
         order = Order.builder()
                 .id(1L)
                 .createdAt(LocalDateTime.now())
                 .totalSum(BigDecimal.valueOf(14999.00))
-                .items(Set.of(cartItem))
+                .build();
+        cartItem = CartItem.builder()
+                .id(1L)
+                .quantity(1)
+                .itemId(item.getId())
+                .orderId(order.getId())
                 .build();
     }
 
     @AfterEach
     void tearDown() {
+        image = null;
         item = null;
-        cartItem = null;
         order = null;
+        cartItem = null;
     }
 
     @Test
     void findAll() {
-        when(cartItemRepository.findAllByOrderIsNull()).thenReturn(Collections.singletonList(cartItem));
-        when(cartItemRepository.countByItem_Id(item.getId())).thenReturn(1);
+        when(cartItemRepository.findAllByOrderIdIsNull()).thenReturn(Flux.just(cartItem));
+        when(itemRepository.findById(item.getId())).thenReturn(Mono.just(item));
+        when(imageRepository.findByItemId(item.getId())).thenReturn(Mono.just(image));
+        when(cartItemRepository.countByItemId(item.getId())).thenReturn(Mono.just(1));
 
-        List<ItemInfo> items = cartItemService.findAll();
+        StepVerifier.create(cartItemService.findAll().collectList())
+                .expectNextMatches(cartItems -> cartItems != null && cartItems.size() == 1)
+                .verifyComplete();
 
-        assertNotNull(items);
-        assertEquals(items.size(), 1);
+        verify(cartItemRepository, times(1)).findAllByOrderIdIsNull();
+        verify(itemRepository, times(1)).findById(item.getId());
+        verify(imageRepository, times(1)).findByItemId(item.getId());
+        verify(cartItemRepository, times(1)).countByItemId(item.getId());
+    }
 
-        verify(cartItemRepository, times(1)).findAllByOrderIsNull();
-        verify(cartItemRepository, times(1)).countByItem_Id(item.getId());
+    @Test
+    void findAllByOrderId() {
+        when(cartItemRepository.findAllByOrderId(order.getId())).thenReturn(Flux.just(cartItem));
+        when(itemRepository.findById(item.getId())).thenReturn(Mono.just(item));
+
+        StepVerifier.create(cartItemService.findAllByOrderId(order.getId()).collectList())
+                .expectNextMatches(cartItems -> cartItems != null && cartItems.size() == 1)
+                .verifyComplete();
+
+        verify(cartItemRepository, times(1)).findAllByOrderId(order.getId());
+        verify(itemRepository, times(1)).findById(item.getId());
     }
 
     @Test
     void purchaseItem() {
-        when(itemRepository.findById(item.getId())).thenReturn(Optional.of(item));
-        when(cartItemRepository.findByItem_Id(item.getId())).thenReturn(Optional.of(cartItem));
-        when(cartItemRepository.save(any(CartItem.class))).thenReturn(cartItem);
+        when(itemRepository.findById(item.getId())).thenReturn(Mono.just(item));
+        when(cartItemRepository.findByItemIdAndOrderIdIsNull(item.getId())).thenReturn(Mono.just(cartItem));
+        when(cartItemRepository.save(any(CartItem.class))).thenReturn(Mono.just(cartItem));
+        when(imageRepository.findByItemId(item.getId())).thenReturn(Mono.just(image));
+        when(cartItemRepository.countByItemId(item.getId())).thenReturn(Mono.just(1));
 
-        ItemInfo itemDb = cartItemService.purchaseItem(item.getId(), Action.PLUS);
 
-        assertNotNull(itemDb);
-        assertEquals(itemDb.getTitle(), item.getTitle());
-        assertEquals(itemDb.getDescription(), item.getDescription());
-        assertEquals(itemDb.getPrice(), item.getPrice());
-        assertEquals(itemDb.getCount(), 2);
+        StepVerifier.create(cartItemService.purchaseItem(item.getId(), Action.PLUS))
+                .expectNextMatches(newItem ->
+                        newItem != null &&
+                        newItem.getId().equals(item.getId()) &&
+                        newItem.getTitle().equals(item.getTitle()) &&
+                        newItem.getDescription().equals(item.getDescription()) &&
+                        newItem.getPrice().equals(item.getPrice()) &&
+                        newItem.getCount().equals(1)
+                )
+                .verifyComplete();
 
         verify(itemRepository, times(1)).findById(item.getId());
-        verify(cartItemRepository, times(1)).findByItem_Id(item.getId());
+        verify(cartItemRepository, times(1)).findByItemIdAndOrderIdIsNull(item.getId());
         verify(cartItemRepository, times(1)).save(any(CartItem.class));
+        verify(imageRepository, times(1)).findByItemId(item.getId());
+        verify(cartItemRepository, times(1)).countByItemId(item.getId());
     }
 
     @Test
     void purchaseOrder() {
-        when(cartItemRepository.findAllByOrderIsNull()).thenReturn(Collections.singletonList(cartItem));
-        when(orderRepository.save(any(Order.class))).thenReturn(order);
+        when(cartItemRepository.findAllByOrderIdIsNull()).thenReturn(Flux.just(cartItem));
+        when(itemRepository.findById(item.getId())).thenReturn(Mono.just(item));
+        when(orderRepository.save(any(Order.class))).thenReturn(Mono.just(order));
+        when(cartItemRepository.saveAll(anyIterable())).thenReturn(Flux.just(cartItem));
 
-        OrderInfo orderDb = cartItemService.purchaseOrder();
+        StepVerifier.create(cartItemService.purchaseOrder())
+                .expectNextMatches(newOrder ->
+                        newOrder != null &&
+                        newOrder.getId().equals(order.getId()) &&
+                        newOrder.getTotalSum().equals(item.getPrice()) &&
+                        newOrder.getItems().size() == 1
+                )
+                .verifyComplete();
 
-        assertNotNull(orderDb);
-        assertEquals(orderDb.getTotalSum(), item.getPrice());
-        assertEquals(orderDb.getItems().size(), 1);
-
-        verify(cartItemRepository, times(1)).findAllByOrderIsNull();
+        verify(cartItemRepository, times(1)).findAllByOrderIdIsNull();
+        verify(itemRepository, atLeastOnce()).findById(item.getId());
         verify(orderRepository, times(1)).save(any(Order.class));
-        verify(cartItemRepository, times(1)).deleteAll(anyIterable());
+        verify(cartItemRepository, times(1)).saveAll(anyIterable());
     }
 
     @Test
     void deleteById() {
-        when(itemRepository.findById(item.getId())).thenReturn(Optional.of(item));
-        when(cartItemRepository.findByItem_Id(item.getId())).thenReturn(Optional.of(cartItem));
+        when(itemRepository.findById(item.getId())).thenReturn(Mono.just(item));
+        when(cartItemRepository.findByItemIdAndOrderIdIsNull(item.getId())).thenReturn(Mono.just(cartItem));
+        when(cartItemRepository.deleteByItemId(item.getId())).thenReturn(Mono.empty());
 
-        cartItemService.deleteById(item.getId(), Action.DELETE);
+        StepVerifier.create(cartItemService.deleteById(item.getId(), Action.DELETE))
+                .verifyComplete();
 
         verify(itemRepository, times(1)).findById(item.getId());
-        verify(cartItemRepository, times(1)).findByItem_Id(item.getId());
-        verify(cartItemRepository, times(1)).deleteByItem_Id(item.getId());
+        verify(cartItemRepository, times(1)).findByItemIdAndOrderIdIsNull(item.getId());
+        verify(cartItemRepository, times(1)).deleteByItemId(item.getId());
     }
 }

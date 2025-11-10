@@ -1,11 +1,13 @@
 package ru.yandex.practicum.service;
 
-import ru.yandex.practicum.dto.ItemInfo;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
+import reactor.core.publisher.Mono;
+import reactor.core.publisher.Flux;
+import ru.yandex.practicum.dto.response.ItemInfo;
 
 public interface ItemService {
-    ItemInfo findById(Long id);
-    Page<ItemInfo> findAll(Pageable pageable);
-    Page<ItemInfo> findAllBySearch(String search, Pageable pageable);
+    Mono<ItemInfo> findById(Long id);
+    Flux<ItemInfo> findAll(Integer limit, Integer offset, String sort);
+    Flux<ItemInfo> findAllBySearch(String search, Integer limit, Integer offset, String sort);
+    Mono<Long> count();
+    Mono<Long> countBySearch(String search);
 }

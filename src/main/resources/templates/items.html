@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html lang="ru" xmlns:th="http://www.thymeleaf.org">
-<!--/*@thymesVar id="item" type="ru.yandex.practicum.dto.ItemInfo"*/-->
+<!--/*@thymesVar id="item" type="ru.yandex.practicum.dto.response.ItemInfo"*/-->
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -122,8 +122,8 @@
                         <input type="hidden" name="search" th:value="${search}">
                         <input type="hidden" name="sort" th:value="${sort}">
                         <input type="hidden" name="order" th:value="${order}">
-                        <input type="hidden" name="pageNumber" th:value="${paging.getNumber()}">
-                        <input type="hidden" name="pageSize" th:value="${paging.getSize()}">
+                        <input type="hidden" name="pageNumber" th:value="${paging.pageNumber}">
+                        <input type="hidden" name="pageSize" th:value="${paging.pageSize}">
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
@@ -162,12 +162,12 @@
                     <div class="col-md-3 col-lg-2">
                         <label for="pageSize" class="form-label">Товаров на странице</label>
                         <select class="form-select" id="pageSize" name="pageSize" onchange="document.getElementById('main').submit()" form="main">
-                            <option value="2" th:selected="${paging.getSize()==2}">2</option>
-                            <option value="5" th:selected="${paging.getSize()==5}">5</option>
-                            <option value="10" th:selected="${paging.getSize()==10}">10</option>
-                            <option value="20" th:selected="${paging.getSize()==20}">20</option>
-                            <option value="50" th:selected="${paging.getSize()==50}">50</option>
-                            <option value="100" th:selected="${paging.getSize()==100}">100</option>
+                            <option value="2" th:selected="${paging.pageSize==2}">2</option>
+                            <option value="5" th:selected="${paging.pageSize==5}">5</option>
+                            <option value="10" th:selected="${paging.pageSize==10}">10</option>
+                            <option value="20" th:selected="${paging.pageSize==20}">20</option>
+                            <option value="50" th:selected="${paging.pageSize==50}">50</option>
+                            <option value="100" th:selected="${paging.pageSize==100}">100</option>
                         </select>
                     </div>
                 </div>
@@ -197,8 +197,8 @@
                                 <input type="hidden" name="id" th:value="${item.id}">
                                 <input type="hidden" name="search" th:value="${search}">
                                 <input type="hidden" name="sort" th:value="${sort}">
-                                <input type="hidden" name="pageSize" th:value="${paging.getSize()}">
-                                <input type="hidden" name="pageNumber" th:value="${paging.getNumber()}">
+                                <input type="hidden" name="pageSize" th:value="${paging.pageSize}">
+                                <input type="hidden" name="pageNumber" th:value="${paging.pageNumber}">
 
                                 <button type="submit" class="btn btn-outline-secondary btn-sm" name="action" value="MINUS"
                                         th:disabled="${item.count == 0}">-</button>
@@ -224,13 +224,13 @@
     <div class="row mt-4">
         <div class="col">
             <div class="d-flex justify-content-center align-items-center gap-3">
-                <button type="submit" class="btn btn-outline-secondary" th:if="${paging.hasPrevious()}"
-                        name="pageNumber" th:value="${paging.getNumber()-1}" form="main">
+                <button type="submit" class="btn btn-outline-secondary" th:if="${paging.hasPrevious}"
+                        name="pageNumber" th:value="${paging.pageNumber-1}" form="main">
                     <i class="bi bi-chevron-left"></i> Назад
                 </button>
-                <span class="fw-bold" th:text="${'Страница ' + paging.getNumber()}"></span>
-                <button type="submit" class="btn btn-outline-secondary" th:if="${paging.hasNext()}"
-                        name="pageNumber" th:value="${paging.getNumber()+1}" form="main">
+                <span class="fw-bold" th:text="${'Страница ' + paging.pageNumber}"></span>
+                <button type="submit" class="btn btn-outline-secondary" th:if="${paging.hasNext}"
+                        name="pageNumber" th:value="${paging.pageNumber+1}" form="main">
                     Вперед <i class="bi bi-chevron-right"></i>
                 </button>
             </div>

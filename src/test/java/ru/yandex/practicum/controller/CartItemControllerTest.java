@@ -2,24 +2,25 @@ package ru.yandex.practicum.controller;
 
 import java.util.UUID;
 import java.math.BigDecimal;
-import java.util.Collections;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.boot.test.autoconfigure.web.reactive.WebFluxTest;
+import org.springframework.test.web.reactive.server.WebTestClient;
 import ru.yandex.practicum.dto.*;
-import org.springframework.test.web.servlet.MockMvc;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
+import ru.yandex.practicum.dto.response.ImageInfo;
+import ru.yandex.practicum.dto.response.ItemInfo;
 import ru.yandex.practicum.service.CartItemService;
 import static org.mockito.Mockito.*;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 
-@WebMvcTest(CartItemController.class)
+@WebFluxTest(CartItemController.class)
 public class CartItemControllerTest {
     @Autowired
-    private MockMvc mockMvc;
+    private WebTestClient webTestClient;
     @MockitoBean
     private CartItemService cartItemService;
     private ImageInfo imageInfo;
@@ -49,32 +50,50 @@ public class CartItemControllerTest {
     }
 
     @Test
-    void findAll() throws Exception {
-        when(cartItemService.findAll()).thenReturn(Collections.singletonList(itemInfo));
+    void findAll() {
+        when(cartItemService.findAll()).thenReturn(Flux.just(itemInfo));
 
-        mockMvc.perform(
-                        get("/cart/items"))
-                .andExpect(status().isOk())
-                .andExpect(view().name("cart"))
-                .andExpect(model().attributeExists("items"))
-                .andExpect(model().attributeExists("total"));
+        webTestClient.get()
+                .uri("/cart/items")
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody(String.class)
+                .value(html -> {
+                    assert html.contains("Samsung T7");
+                    assert html.contains("14999");
+                    assert html.contains("1ТБ");
+                    assert html.contains("1050 МБ/с");
+                    assert html.contains("item");
+                    assert html.contains("items");
+                });
 
         verify(cartItemService, times(1)).findAll();
     }
 
     @Test
-    void purchaseItem() throws Exception {
-        when(cartItemService.purchaseItem(any(), any())).thenReturn(itemInfo);
+    void purchaseItem() {
+        when(cartItemService.purchaseItem(any(), any())).thenReturn(Mono.just(itemInfo));
+        when(cartItemService.findAll()).thenReturn(Flux.just(itemInfo));
 
-        mockMvc.perform(
-                        post("/cart/items")
-                                .param("id", itemInfo.getId().toString())
-                                .param("action", Action.PLUS.name()))
-                .andExpect(status().isOk())
-                .andExpect(view().name("cart"))
-                .andExpect(model().attributeExists("items"))
-                .andExpect(model().attributeExists("total"));
+        webTestClient.post()
+                .uri(uriBuilder -> uriBuilder
+                        .path("/cart/items")
+                        .queryParam("id", itemInfo.getId().toString())
+                        .queryParam("action", Action.PLUS)
+                        .build())
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody(String.class)
+                .value(html -> {
+                    assert html.contains("Samsung T7");
+                    assert html.contains("14999");
+                    assert html.contains("1ТБ");
+                    assert html.contains("1050 МБ/с");
+                    assert html.contains("item");
+                    assert html.contains("items");
+                });
 
         verify(cartItemService, times(1)).purchaseItem(any(), any());
+        verify(cartItemService, times(1)).findAll();
     }
 }

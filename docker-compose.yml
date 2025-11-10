@@ -32,6 +32,9 @@ services:
       - SPRING_DATASOURCE_URL=jdbc:postgresql://shop-db:5432/shop
       - SPRING_DATASOURCE_USERNAME=root
       - SPRING_DATASOURCE_PASSWORD=root
+      - SPRING_R2DBC_URL=r2dbc:postgresql://shop-db:5432/shop
+      - SPRING_R2DBC_USERNAME=root
+      - SPRING_R2DBC_PASSWORD=root
       - AWS_REGION=${AWS_REGION}
       - AWS_SERVICE_ENDPOINT=${AWS_SERVICE_ENDPOINT}
       - AWS_BUCKET_NAME=${AWS_BUCKET_NAME}

@@ -6,7 +6,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import com.amazonaws.services.s3.AmazonS3;
-import ru.yandex.practicum.dto.ImageInfo;
+import ru.yandex.practicum.dto.response.ImageInfo;
 import org.springframework.core.io.ClassPathResource;
 import java.io.IOException;
 import static org.junit.jupiter.api.Assertions.*;

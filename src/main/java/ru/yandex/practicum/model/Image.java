@@ -1,8 +1,10 @@
 package ru.yandex.practicum.model;
 
 import lombok.*;
-import jakarta.persistence.*;
 import java.time.LocalDateTime;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.relational.core.mapping.Table;
+import org.springframework.data.relational.core.mapping.Column;
 
 @Setter
 @Getter
@@ -10,16 +12,14 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @NoArgsConstructor
 @EqualsAndHashCode(of = "id")
-@Entity
 @Table(name = "images")
 public class Image {
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-    @Column(name = "file_name", nullable = false)
+    @Column("file_name")
     private String fileName;
-    @Column(name = "image_url", nullable = false)
+    @Column("image_url")
     private String imageUrl;
-    @Column(name = "created_at", nullable = false)
+    @Column("created_at")
     private LocalDateTime createdAt;
 }
