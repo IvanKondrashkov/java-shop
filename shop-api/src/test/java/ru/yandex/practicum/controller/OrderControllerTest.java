@@ -6,8 +6,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.boot.test.autoconfigure.web.reactive.WebFluxTest;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -16,8 +16,7 @@ import ru.yandex.practicum.dto.response.OrderInfo;
 import ru.yandex.practicum.service.OrderService;
 import static org.mockito.Mockito.*;
 
-@WebFluxTest(OrderController.class)
-public class OrderControllerTest {
+public class OrderControllerTest extends BaseControllerTest {
     @Autowired
     private WebTestClient webTestClient;
     @MockitoBean
@@ -40,6 +39,7 @@ public class OrderControllerTest {
     }
 
     @Test
+    @WithMockUser(username = "Djon")
     void findById() {
         when(orderService.findById(any())).thenReturn(Mono.just(orderInfo));
 
@@ -60,6 +60,7 @@ public class OrderControllerTest {
     }
 
     @Test
+    @WithMockUser(username = "Djon")
     void findAll() {
         when(orderService.findAll()).thenReturn(Flux.just(orderInfo));
 
@@ -79,8 +80,9 @@ public class OrderControllerTest {
     }
 
     @Test
+    @WithMockUser(username = "Djon")
     void buy() {
-        when(orderService.buy(anyLong())).thenReturn(Mono.just(orderInfo));
+        when(orderService.buy()).thenReturn(Mono.just(orderInfo));
 
         webTestClient.post()
                 .uri(uriBuilder -> uriBuilder
@@ -90,6 +92,6 @@ public class OrderControllerTest {
                 .expectStatus().is3xxRedirection()
                 .expectHeader().location("/orders/1?newOrder=true");
 
-        verify(orderService, times(1)).buy(anyLong());
+        verify(orderService, times(1)).buy();
     }
 }

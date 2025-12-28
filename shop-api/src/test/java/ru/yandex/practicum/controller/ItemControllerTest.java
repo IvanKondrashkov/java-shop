@@ -8,8 +8,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.client.MultipartBodyBuilder;
+import org.springframework.security.test.context.support.WithAnonymousUser;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.boot.test.autoconfigure.web.reactive.WebFluxTest;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import org.springframework.web.reactive.function.BodyInserters;
 import reactor.core.publisher.Flux;
@@ -22,8 +23,7 @@ import ru.yandex.practicum.service.AdminService;
 import ru.yandex.practicum.service.CartItemService;
 import static org.mockito.Mockito.*;
 
-@WebFluxTest(ItemController.class)
-class ItemControllerTest {
+class ItemControllerTest extends BaseControllerTest {
     @Autowired
     private WebTestClient webTestClient;
     @MockitoBean
@@ -59,6 +59,7 @@ class ItemControllerTest {
     }
 
     @Test
+    @WithAnonymousUser
     void redirectToItems() {
         webTestClient.get()
                 .uri("/")
@@ -68,6 +69,7 @@ class ItemControllerTest {
     }
 
     @Test
+    @WithAnonymousUser
     void findById() {
         when(itemService.findById(any())).thenReturn(Mono.just(itemInfo));
 
@@ -88,6 +90,7 @@ class ItemControllerTest {
     }
 
     @Test
+    @WithAnonymousUser
     void findAll() {
         when(itemService.findAll(any(), any(), any())).thenReturn(Flux.just(itemInfo));
         when(itemService.count()).thenReturn(Mono.just(1L));
@@ -111,6 +114,7 @@ class ItemControllerTest {
     }
 
     @Test
+    @WithAnonymousUser
     void findAllBySearch() {
         when(itemService.findAllBySearch(anyString(), any(), any(), any())).thenReturn(Flux.just(itemInfo));
         when(itemService.countBySearch(anyString())).thenReturn(Mono.just(1L));
@@ -137,6 +141,7 @@ class ItemControllerTest {
     }
 
     @Test
+    @WithMockUser(username = "Djon")
     void purchaseItemById() {
         when(cartItemService.purchaseItem(any(), any())).thenReturn(Mono.just(itemInfo));
 
@@ -160,6 +165,7 @@ class ItemControllerTest {
     }
 
     @Test
+    @WithMockUser(username = "Djon")
     void purchaseItem() {
         when(cartItemService.purchaseItem(any(), any())).thenReturn(Mono.just(itemInfo));
 
@@ -177,6 +183,7 @@ class ItemControllerTest {
     }
 
     @Test
+    @WithMockUser(username = "Djon", roles = {"ADMIN"})
     void importCsvFile() {
         MultipartBodyBuilder builder = new MultipartBodyBuilder();
         builder.part("file", new ClassPathResource("static/items.csv"))

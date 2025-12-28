@@ -7,5 +7,5 @@ import ru.yandex.practicum.dto.response.OrderInfo;
 public interface OrderService {
     Mono<OrderInfo> findById(Long id);
     Flux<OrderInfo> findAll();
-    Mono<OrderInfo> buy(Long userId);
+    Mono<OrderInfo> buy();
 }

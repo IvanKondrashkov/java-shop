@@ -12,11 +12,13 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
+import ru.yandex.practicum.dto.Role;
 import ru.yandex.practicum.model.Item;
 import ru.yandex.practicum.model.Order;
 import ru.yandex.practicum.model.CartItem;
 import ru.yandex.practicum.mapper.OrderMapper;
 import ru.yandex.practicum.mapper.CartItemMapper;
+import ru.yandex.practicum.model.User;
 import ru.yandex.practicum.repository.OrderRepository;
 import org.mockito.junit.jupiter.MockitoExtension;
 import static org.mockito.Mockito.*;
@@ -27,9 +29,12 @@ public class OrderServiceImplTest {
     private OrderRepository orderRepository;
     @Mock
     private CartItemService cartItemService;
+    @Mock
+    private UserService userService;
     @InjectMocks
     private OrderServiceImpl orderService;
     private Item item;
+    private User user;
     private Order order;
     private CartItem cartItem;
 
@@ -42,14 +47,23 @@ public class OrderServiceImplTest {
                 .description("Portable SSD 1ТБ со скоростью передачи до 1050 МБ/с")
                 .price(BigDecimal.valueOf(14999.00))
                 .build();
+        user = User.builder()
+                .id(1L)
+                .username("Djon")
+                .password("123456")
+                .role(Role.USER.name())
+                .enabled(true)
+                .build();
         order = Order.builder()
                 .id(1L)
                 .createdAt(LocalDateTime.now())
                 .totalSum(BigDecimal.valueOf(14999.00))
+                .userId(user.getId())
                 .build();
         cartItem = CartItem.builder()
                 .id(1L)
                 .quantity(1)
+                .userId(user.getId())
                 .itemId(item.getId())
                 .orderId(order.getId())
                 .build();
@@ -57,13 +71,16 @@ public class OrderServiceImplTest {
 
     @AfterEach
     void tearDown() {
+        item = null;
+        user = null;
         order = null;
         cartItem = null;
     }
 
     @Test
     void findById() {
-        when(orderRepository.findById(order.getId())).thenReturn(Mono.just(order));
+        when(userService.getCurrentUserId()).thenReturn(Mono.just(1L));
+        when(orderRepository.findByIdAndUserId(order.getId(), user.getId())).thenReturn(Mono.just(order));
         when(cartItemService.findAllByOrderId(order.getId())).thenReturn(
                 Flux.just(CartItemMapper.cartItemToCartItemInfo(cartItem, item))
         );
@@ -77,13 +94,15 @@ public class OrderServiceImplTest {
                 )
                 .verifyComplete();
 
-        verify(orderRepository, times(1)).findById(order.getId());
+        verify(userService, times(1)).getCurrentUserId();
+        verify(orderRepository, times(1)).findByIdAndUserId(order.getId(), user.getId());
         verify(cartItemService, times(1)).findAllByOrderId(order.getId());
     }
 
     @Test
     void findAll() {
-        when(orderRepository.findAll()).thenReturn(Flux.just(order));
+        when(userService.getCurrentUserId()).thenReturn(Mono.just(1L));
+        when(orderRepository.findAllByUserId(user.getId())).thenReturn(Flux.just(order));
         when(cartItemService.findAllByOrderId(order.getId())).thenReturn(
                 Flux.just(CartItemMapper.cartItemToCartItemInfo(cartItem, item))
         );
@@ -92,17 +111,19 @@ public class OrderServiceImplTest {
                 .expectNextMatches(orders -> orders != null && orders.size() == 1)
                 .verifyComplete();
 
-        verify(orderRepository, times(1)).findAll();
+        verify(userService, times(1)).getCurrentUserId();
+        verify(orderRepository, times(1)).findAllByUserId(user.getId());
         verify(cartItemService, times(1)).findAllByOrderId(order.getId());
     }
 
     @Test
     void buy() {
-        when(cartItemService.purchaseOrder(anyLong())).thenReturn(
+        when(userService.getCurrentUserId()).thenReturn(Mono.just(1L));
+        when(cartItemService.purchaseOrder(user.getId())).thenReturn(
                 Mono.just(OrderMapper.orderToOrderInfo(order, List.of(CartItemMapper.cartItemToCartItemInfo(cartItem, item))))
         );
 
-        StepVerifier.create(orderService.buy(anyLong()))
+        StepVerifier.create(orderService.buy())
                 .expectNextMatches(newOrder ->
                         newOrder != null &&
                         newOrder.getId().equals(order.getId()) &&
@@ -111,6 +132,7 @@ public class OrderServiceImplTest {
                 )
                 .verifyComplete();
 
-        verify(cartItemService, times(1)).purchaseOrder(anyLong());
+        verify(userService, times(1)).getCurrentUserId();
+        verify(cartItemService, times(1)).purchaseOrder(user.getId());
     }
 }

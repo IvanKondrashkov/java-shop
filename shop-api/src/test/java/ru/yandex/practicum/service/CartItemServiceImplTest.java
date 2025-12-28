@@ -1,6 +1,7 @@
 package ru.yandex.practicum.service;
 
 import java.util.*;
+import java.time.Duration;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import org.mockito.Mock;
@@ -16,10 +17,8 @@ import ru.yandex.practicum.client.PaymentClient;
 import ru.yandex.practicum.client.model.PaymentRequest;
 import ru.yandex.practicum.client.model.PaymentResponse;
 import ru.yandex.practicum.dto.Action;
-import ru.yandex.practicum.model.Image;
-import ru.yandex.practicum.model.Item;
-import ru.yandex.practicum.model.Order;
-import ru.yandex.practicum.model.CartItem;
+import ru.yandex.practicum.dto.Role;
+import ru.yandex.practicum.model.*;
 import ru.yandex.practicum.repository.ImageRepository;
 import ru.yandex.practicum.repository.ItemRepository;
 import ru.yandex.practicum.repository.CartItemRepository;
@@ -38,6 +37,8 @@ public class CartItemServiceImplTest {
     @Mock
     private OrderRepository orderRepository;
     @Mock
+    private UserService userService;
+    @Mock
     private CacheService cacheService;
     @Mock
     private PaymentClient paymentClient;
@@ -45,6 +46,7 @@ public class CartItemServiceImplTest {
     private CartItemServiceImpl cartItemService;
     private Image image;
     private Item item;
+    private User user;
     private Order order;
     private CartItem cartItem;
     private PaymentResponse paymentResponse;
@@ -66,20 +68,29 @@ public class CartItemServiceImplTest {
                 .price(BigDecimal.valueOf(14999.00))
                 .imageId(image.getId())
                 .build();
+        user = User.builder()
+                .id(1L)
+                .username("Djon")
+                .password("123456")
+                .role(Role.USER.name())
+                .enabled(true)
+                .build();
         order = Order.builder()
                 .id(1L)
                 .createdAt(LocalDateTime.now())
                 .totalSum(BigDecimal.valueOf(14999.00))
+                .userId(user.getId())
                 .build();
         cartItem = CartItem.builder()
                 .id(1L)
                 .quantity(1)
+                .userId(user.getId())
                 .itemId(item.getId())
                 .orderId(order.getId())
                 .build();
 
         paymentResponse = new PaymentResponse();
-        paymentResponse.setUserId(1L);
+        paymentResponse.setUserId(user.getId());
         paymentResponse.setStatus(PaymentResponse.StatusEnum.SUCCESS);
     }
 
@@ -87,6 +98,7 @@ public class CartItemServiceImplTest {
     void tearDown() {
         image = null;
         item = null;
+        user = null;
         order = null;
         cartItem = null;
         paymentResponse = null;
@@ -94,58 +106,59 @@ public class CartItemServiceImplTest {
 
     @Test
     void findAll() {
-        when(cacheService.addItem(item)).thenReturn(Mono.empty());
-        when(cacheService.getItem(item.getId().toString())).thenReturn(Mono.just(item));
-        when(cacheService.addImage(item.getId().toString(), image)).thenReturn(Mono.empty());
-        when(cacheService.getImage(item.getId().toString())).thenReturn(Mono.just(image));
-        when(cartItemRepository.findAllByOrderIdIsNull()).thenReturn(Flux.just(cartItem));
+        when(userService.getCurrentUserId()).thenReturn(Mono.just(1L));
+        when(cacheService.save("item", item.getId().toString(), item, Duration.ofMinutes(10))).thenReturn(Mono.empty());
+        when(cacheService.get("item", item.getId().toString(), Item.class)).thenReturn(Mono.just(item));
+        when(cacheService.save("image", item.getId().toString(), image, Duration.ofMinutes(10))).thenReturn(Mono.empty());
+        when(cacheService.get("image", item.getId().toString(), Image.class)).thenReturn(Mono.just(image));
+        when(cartItemRepository.findAllByUserIdAndOrderIdIsNull(user.getId())).thenReturn(Flux.just(cartItem));
         when(itemRepository.findById(item.getId())).thenReturn(Mono.just(item));
         when(imageRepository.findByItemId(item.getId())).thenReturn(Mono.just(image));
-        when(cartItemRepository.countByItemId(item.getId())).thenReturn(Mono.just(1));
 
         StepVerifier.create(cartItemService.findAll().collectList())
                 .expectNextMatches(cartItems -> cartItems != null && cartItems.size() == 1)
                 .verifyComplete();
 
-        verify(cacheService, times(1)).addItem(item);
-        verify(cacheService, times(1)).getItem(item.getId().toString());
-        verify(cacheService, times(1)).addImage(item.getId().toString(), image);
-        verify(cacheService, times(1)).getImage(item.getId().toString());
-        verify(cartItemRepository, times(1)).findAllByOrderIdIsNull();
+        verify(userService, times(1)).getCurrentUserId();
+        verify(cacheService, times(1)).save("item", item.getId().toString(), item, Duration.ofMinutes(10));
+        verify(cacheService, times(1)).get("item", item.getId().toString(), Item.class);
+        verify(cacheService, times(1)).save("image", item.getId().toString(), image, Duration.ofMinutes(10));
+        verify(cacheService, times(1)).get("image", item.getId().toString(), Image.class);
+        verify(cartItemRepository, times(1)).findAllByUserIdAndOrderIdIsNull(user.getId());
         verify(itemRepository, times(1)).findById(item.getId());
         verify(imageRepository, times(1)).findByItemId(item.getId());
-        verify(cartItemRepository, times(1)).countByItemId(item.getId());
     }
 
     @Test
     void findAllByOrderId() {
-        when(cacheService.addItem(item)).thenReturn(Mono.empty());
-        when(cacheService.getItem(item.getId().toString())).thenReturn(Mono.just(item));
-        when(cartItemRepository.findAllByOrderId(order.getId())).thenReturn(Flux.just(cartItem));
+        when(userService.getCurrentUserId()).thenReturn(Mono.just(1L));
+        when(cacheService.save("item", item.getId().toString(), item, Duration.ofMinutes(10))).thenReturn(Mono.empty());
+        when(cacheService.get("item", item.getId().toString(), Item.class)).thenReturn(Mono.just(item));
+        when(cartItemRepository.findAllByOrderIdAndUserId(order.getId(), user.getId())).thenReturn(Flux.just(cartItem));
         when(itemRepository.findById(item.getId())).thenReturn(Mono.just(item));
 
         StepVerifier.create(cartItemService.findAllByOrderId(order.getId()).collectList())
                 .expectNextMatches(cartItems -> cartItems != null && cartItems.size() == 1)
                 .verifyComplete();
 
-        verify(cacheService, times(1)).addItem(item);
-        verify(cacheService, times(1)).getItem(item.getId().toString());
-        verify(cartItemRepository, times(1)).findAllByOrderId(order.getId());
+        verify(userService, times(1)).getCurrentUserId();
+        verify(cacheService, times(1)).save("item", item.getId().toString(), item, Duration.ofMinutes(10));
+        verify(cacheService, times(1)).get("item", item.getId().toString(), Item.class);
+        verify(cartItemRepository, times(1)).findAllByOrderIdAndUserId(order.getId(), user.getId());
         verify(itemRepository, times(1)).findById(item.getId());
     }
 
     @Test
     void purchaseItem() {
-        when(cacheService.addItem(item)).thenReturn(Mono.empty());
-        when(cacheService.getItem(item.getId().toString())).thenReturn(Mono.just(item));
-        when(cacheService.addImage(item.getId().toString(), image)).thenReturn(Mono.empty());
-        when(cacheService.getImage(item.getId().toString())).thenReturn(Mono.just(image));
+        when(userService.getCurrentUserId()).thenReturn(Mono.just(1L));
+        when(cacheService.save("item", item.getId().toString(), item, Duration.ofMinutes(10))).thenReturn(Mono.empty());
+        when(cacheService.get("item", item.getId().toString(), Item.class)).thenReturn(Mono.just(item));
+        when(cacheService.save("image", item.getId().toString(), image, Duration.ofMinutes(10))).thenReturn(Mono.empty());
+        when(cacheService.get("image", item.getId().toString(), Image.class)).thenReturn(Mono.just(image));
         when(itemRepository.findById(item.getId())).thenReturn(Mono.just(item));
-        when(cartItemRepository.findByItemIdAndOrderIdIsNull(item.getId())).thenReturn(Mono.just(cartItem));
+        when(cartItemRepository.findByItemIdAndUserIdAndOrderIdIsNull(item.getId(), user.getId())).thenReturn(Mono.just(cartItem));
         when(cartItemRepository.save(any(CartItem.class))).thenReturn(Mono.just(cartItem));
         when(imageRepository.findByItemId(item.getId())).thenReturn(Mono.just(image));
-        when(cartItemRepository.countByItemId(item.getId())).thenReturn(Mono.just(1));
-
 
         StepVerifier.create(cartItemService.purchaseItem(item.getId(), Action.PLUS))
                 .expectNextMatches(newItem ->
@@ -154,26 +167,26 @@ public class CartItemServiceImplTest {
                         newItem.getTitle().equals(item.getTitle()) &&
                         newItem.getDescription().equals(item.getDescription()) &&
                         newItem.getPrice().compareTo(item.getPrice()) == 0 &&
-                        newItem.getCount().equals(1)
+                        newItem.getCount().equals(2)
                 )
                 .verifyComplete();
 
-        verify(cacheService, times(1)).addItem(item);
-        verify(cacheService, times(1)).getItem(item.getId().toString());
-        verify(cacheService, times(1)).addImage(item.getId().toString(), image);
-        verify(cacheService, times(1)).getImage(item.getId().toString());
+        verify(userService, times(1)).getCurrentUserId();
+        verify(cacheService, times(1)).save("item", item.getId().toString(), item, Duration.ofMinutes(10));
+        verify(cacheService, times(1)).get("item", item.getId().toString(), Item.class);
+        verify(cacheService, times(1)).save("image", item.getId().toString(), image, Duration.ofMinutes(10));
+        verify(cacheService, times(1)).get("image", item.getId().toString(), Image.class);
         verify(itemRepository, times(1)).findById(item.getId());
-        verify(cartItemRepository, times(1)).findByItemIdAndOrderIdIsNull(item.getId());
+        verify(cartItemRepository, times(1)).findByItemIdAndUserIdAndOrderIdIsNull(item.getId(), user.getId());
         verify(cartItemRepository, times(1)).save(any(CartItem.class));
         verify(imageRepository, times(1)).findByItemId(item.getId());
-        verify(cartItemRepository, times(1)).countByItemId(item.getId());
     }
 
     @Test
     void purchaseOrder() {
-        when(cacheService.addItem(item)).thenReturn(Mono.empty());
-        when(cacheService.getItem(item.getId().toString())).thenReturn(Mono.just(item));
-        when(cartItemRepository.findAllByOrderIdIsNull()).thenReturn(Flux.just(cartItem));
+        when(cacheService.save("item", item.getId().toString(), item, Duration.ofMinutes(10))).thenReturn(Mono.empty());
+        when(cacheService.get("item", item.getId().toString(), Item.class)).thenReturn(Mono.just(item));
+        when(cartItemRepository.findAllByUserIdAndOrderIdIsNull(user.getId())).thenReturn(Flux.just(cartItem));
         when(itemRepository.findById(item.getId())).thenReturn(Mono.just(item));
         when(orderRepository.save(any(Order.class))).thenReturn(Mono.just(order));
         when(cartItemRepository.saveAll(anyIterable())).thenReturn(Flux.just(cartItem));
@@ -188,9 +201,9 @@ public class CartItemServiceImplTest {
                 )
                 .verifyComplete();
 
-        verify(cacheService, times(2)).addItem(item);
-        verify(cacheService, times(2)).getItem(item.getId().toString());
-        verify(cartItemRepository, times(1)).findAllByOrderIdIsNull();
+        verify(cacheService, times(2)).save("item", item.getId().toString(), item, Duration.ofMinutes(10));
+        verify(cacheService, times(2)).get("item", item.getId().toString(), Item.class);
+        verify(cartItemRepository, times(1)).findAllByUserIdAndOrderIdIsNull(user.getId());
         verify(itemRepository, atLeastOnce()).findById(item.getId());
         verify(orderRepository, times(2)).save(any(Order.class));
         verify(cartItemRepository, times(1)).saveAll(anyIterable());
@@ -199,19 +212,21 @@ public class CartItemServiceImplTest {
 
     @Test
     void deleteById() {
-        when(cacheService.addItem(item)).thenReturn(Mono.empty());
-        when(cacheService.getItem(item.getId().toString())).thenReturn(Mono.just(item));
+        when(userService.getCurrentUserId()).thenReturn(Mono.just(1L));
+        when(cacheService.save("item", item.getId().toString(), item, Duration.ofMinutes(10))).thenReturn(Mono.empty());
+        when(cacheService.get("item", item.getId().toString(), Item.class)).thenReturn(Mono.just(item));
         when(itemRepository.findById(item.getId())).thenReturn(Mono.just(item));
-        when(cartItemRepository.findByItemIdAndOrderIdIsNull(item.getId())).thenReturn(Mono.just(cartItem));
-        when(cartItemRepository.deleteByItemId(item.getId())).thenReturn(Mono.empty());
+        when(cartItemRepository.findByItemIdAndUserIdAndOrderIdIsNull(item.getId(), user.getId())).thenReturn(Mono.just(cartItem));
+        when(cartItemRepository.deleteByItemIdAndUserId(item.getId(), user.getId())).thenReturn(Mono.empty());
 
         StepVerifier.create(cartItemService.deleteById(item.getId(), Action.DELETE))
                 .verifyComplete();
 
-        verify(cacheService, times(1)).addItem(item);
-        verify(cacheService, times(1)).getItem(item.getId().toString());
+        verify(userService, times(1)).getCurrentUserId();
+        verify(cacheService, times(1)).save("item", item.getId().toString(), item, Duration.ofMinutes(10));
+        verify(cacheService, times(1)).get("item", item.getId().toString(), Item.class);
         verify(itemRepository, times(1)).findById(item.getId());
-        verify(cartItemRepository, times(1)).findByItemIdAndOrderIdIsNull(item.getId());
-        verify(cartItemRepository, times(1)).deleteByItemId(item.getId());
+        verify(cartItemRepository, times(1)).findByItemIdAndUserIdAndOrderIdIsNull(item.getId(), user.getId());
+        verify(cartItemRepository, times(1)).deleteByItemIdAndUserId(item.getId(), user.getId());
     }
 }

@@ -9,6 +9,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
+import ru.yandex.practicum.dto.Role;
 import ru.yandex.practicum.model.User;
 import ru.yandex.practicum.model.Balance;
 import ru.yandex.practicum.repository.BalanceRepository;
@@ -31,8 +32,10 @@ public class BalanceServiceImplTest {
     void setUp() {
         user = User.builder()
                 .id(1L)
-                .firstName("Djon")
-                .lastName("Doe")
+                .username("Djon")
+                .password("123456")
+                .role(Role.USER.name())
+                .enabled(true)
                 .build();
         balance = Balance.builder()
                 .id(1L)

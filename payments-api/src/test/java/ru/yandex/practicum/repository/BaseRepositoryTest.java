@@ -20,7 +20,7 @@ public abstract class BaseRepositoryTest {
             .withUsername("root")
             .withPassword("root")
             .withReuse(true)
-            .withInitScripts("./db/migrations/05-users-create.sql",
+            .withInitScripts("./db/migrations/03-users-create.sql",
                     "./db/migrations/06-balances-create.sql",
                     "./db/migrations/07-payments-create.sql"
             );
