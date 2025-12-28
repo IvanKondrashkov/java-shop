@@ -7,8 +7,6 @@ import org.springframework.stereotype.Service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.data.redis.core.ReactiveRedisTemplate;
 import reactor.core.publisher.Mono;
-import ru.yandex.practicum.model.Item;
-import ru.yandex.practicum.model.Image;
 import ru.yandex.practicum.utils.CacheUtils;
 
 @Service
@@ -18,64 +16,33 @@ public class CacheServiceImpl implements CacheService {
     private final ObjectMapper objectMapper;
 
     @Override
-    public Mono<Boolean> addImage(Image image) {
+    public <T> Mono<T> save(String prefix, String id, T entity, Duration duration) {
+        String key = CacheUtils.buildKey(prefix, id);
         return reactiveRedisTemplate.opsForValue()
-                .set(CacheUtils.buildKey("image", image.getFileName()), image, Duration.ofMinutes(3));
+                .set(key, entity, duration)
+                .thenReturn(entity);
     }
 
     @Override
-    public Mono<Boolean> addImage(String itemId, Image image) {
+    public <T> Mono<T> get(String prefix, String id, Class<T> clazz) {
+        String key = CacheUtils.buildKey(prefix, id);
         return reactiveRedisTemplate.opsForValue()
-                .set(CacheUtils.buildKey("image", itemId), image, Duration.ofMinutes(10));
+                .get(key)
+                .map(obj -> objectMapper.convertValue(obj, clazz));
     }
 
     @Override
-    public Mono<Image> getImage(String key) {
-        return reactiveRedisTemplate.opsForValue()
-                .get(CacheUtils.buildKey("image", key))
-                .map(obj -> objectMapper.convertValue(obj, Image.class));
+    public <T> Mono<Boolean> saveList(String key, List<T> entities, Duration duration) {
+        return !entities.isEmpty() ? reactiveRedisTemplate.opsForList()
+                .rightPushAll(key, entities.toArray())
+                .then(reactiveRedisTemplate.expire(key, duration)) : Mono.empty();
     }
 
     @Override
-    public Mono<Boolean> addItem(Item item) {
-        return reactiveRedisTemplate.opsForValue()
-                .set(CacheUtils.buildKey("item", item.getId().toString()), item, Duration.ofMinutes(10));
-    }
-
-    @Override
-    public Mono<Item> getItem(String id) {
-        return reactiveRedisTemplate.opsForValue()
-                .get(CacheUtils.buildKey("item", id))
-                .map(obj -> objectMapper.convertValue(obj, Item.class));
-    }
-
-    @Override
-    public Mono<Boolean> addItems(String key, List<Item> items) {
-        return !items.isEmpty() ? reactiveRedisTemplate.opsForList()
-                .rightPushAll(key, items.toArray())
-                .then(reactiveRedisTemplate.expire(key, Duration.ofMinutes(10))) : Mono.empty();
-    }
-
-    @Override
-    public Mono<List<Item>> getItems(String key) {
+    public <T> Mono<List<T>> getList(String key, Class<T> clazz) {
         return reactiveRedisTemplate.opsForList()
                 .range(key, 0, -1)
-                .map(obj -> objectMapper.convertValue(obj, Item.class))
-                .collectList();
-    }
-
-    @Override
-    public Mono<Boolean> addItemsSearch(String key, List<Item> items) {
-        return !items.isEmpty() ? reactiveRedisTemplate.opsForList()
-                .rightPushAll(key, items.toArray())
-                .then(reactiveRedisTemplate.expire(key, Duration.ofMinutes(5))) : Mono.empty();
-    }
-
-    @Override
-    public Mono<List<Item>> getItemsSearch(String key) {
-        return reactiveRedisTemplate.opsForList()
-                .range(key, 0, -1)
-                .map(obj -> objectMapper.convertValue(obj, Item.class))
+                .map(obj -> objectMapper.convertValue(obj, clazz))
                 .collectList();
     }
 }

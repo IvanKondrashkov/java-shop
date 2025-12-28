@@ -1,6 +1,7 @@
 package ru.yandex.practicum.service;
 
 import java.util.List;
+import java.time.Duration;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import lombok.RequiredArgsConstructor;
@@ -38,17 +39,19 @@ public class CartItemServiceImpl implements CartItemService {
     private final ItemRepository itemRepository;
     private final CartItemRepository cartItemRepository;
     private final OrderRepository orderRepository;
+    private final UserService userService;
     private final CacheService cacheService;
     private final PaymentClient paymentClient;
 
     @Override
     @Transactional(readOnly = true)
     public Flux<ItemInfo> findAll() {
-        return cartItemRepository.findAllByOrderIdIsNull()
-                .flatMap(it -> Mono.zip(
-                        processItem(it.getItemId()),
-                        processImage(it.getItemId()),
-                        cartItemRepository.countByItemId(it.getItemId()).defaultIfEmpty(0))
+        return userService.getCurrentUserId()
+                .flatMapMany(cartItemRepository::findAllByUserIdAndOrderIdIsNull)
+                .flatMap(cartItem -> Mono.zip(
+                        processItem(cartItem.getItemId()),
+                        processImage(cartItem.getItemId()),
+                        Mono.just(cartItem.getQuantity()).defaultIfEmpty(0))
                 )
                 .map(tuple -> ItemMapper.itemToItemInfo(tuple.getT1(), tuple.getT2(), tuple.getT3()));
     }
@@ -56,34 +59,38 @@ public class CartItemServiceImpl implements CartItemService {
     @Override
     @Transactional(readOnly = true)
     public Flux<CartItemInfo> findAllByOrderId(Long id) {
-        return cartItemRepository.findAllByOrderId(id)
-                .flatMap(it -> Mono.zip(Mono.just(it), processItem(it.getItemId()))
-                .map(tuple -> CartItemMapper.cartItemToCartItemInfo(tuple.getT1(), tuple.getT2())));
+        return userService.getCurrentUserId()
+                .flatMapMany(userId -> cartItemRepository.findAllByOrderIdAndUserId(id, userId))
+                .flatMap(cartItem -> Mono.zip(Mono.just(cartItem), processItem(cartItem.getItemId())))
+                .map(tuple -> CartItemMapper.cartItemToCartItemInfo(tuple.getT1(), tuple.getT2()));
     }
 
     @Override
     public Mono<ItemInfo> purchaseItem(Long id, Action action) {
-        return processItem(id)
-                .switchIfEmpty(Mono.error(new EntityNotFoundException("Item not found!")))
-                .flatMap(item -> cartItemRepository.findByItemIdAndOrderIdIsNull(item.getId())
-                        .switchIfEmpty(Mono.just(CartItem.builder()
-                                .quantity(0)
-                                .itemId(item.getId())
-                                .build()))
-                        .flatMap(it -> updateCartItemQuantity(it, action))
-                        .flatMap(cartItemRepository::save)
-                        .flatMap(it -> Mono.zip(
-                                Mono.just(item),
-                                processImage(item.getId()),
-                                cartItemRepository.countByItemId(it.getItemId()).defaultIfEmpty(0)
-                        ))
-                )
-                .map(tuple -> ItemMapper.itemToItemInfo(tuple.getT1(), tuple.getT2(), tuple.getT3()));
+        return userService.getCurrentUserId()
+                .flatMap(userId -> processItem(id)
+                        .switchIfEmpty(Mono.error(new EntityNotFoundException("Item not found!")))
+                        .flatMap(item -> cartItemRepository.findByItemIdAndUserIdAndOrderIdIsNull(item.getId(), userId)
+                                .switchIfEmpty(Mono.just(CartItem.builder()
+                                        .quantity(0)
+                                        .itemId(item.getId())
+                                        .userId(userId)
+                                        .build()))
+                                .flatMap(cartItem -> updateCartItemQuantity(cartItem, action))
+                                .flatMap(cartItemRepository::save)
+                                .flatMap(cartItem -> Mono.zip(
+                                        Mono.just(item),
+                                        processImage(item.getId()),
+                                        Mono.just(cartItem.getQuantity()).defaultIfEmpty(0)
+                                ))
+                        )
+                        .map(tuple -> ItemMapper.itemToItemInfo(tuple.getT1(), tuple.getT2(), tuple.getT3()))
+                );
     }
 
     @Override
     public Mono<OrderInfo> purchaseOrder(Long userId) {
-        return cartItemRepository.findAllByOrderIdIsNull()
+        return cartItemRepository.findAllByUserIdAndOrderIdIsNull(userId)
                 .switchIfEmpty(Mono.error(new EntityIsEmptyException("Cart is empty!")))
                 .collectList()
                 .flatMap(cartItems -> Mono.zip(Mono.just(cartItems), calculateTotalSum(cartItems)))
@@ -92,20 +99,23 @@ public class CartItemServiceImpl implements CartItemService {
 
     @Override
     public Mono<Void> deleteById(Long id, Action action) {
-        return processItem(id)
-                .switchIfEmpty(Mono.error(new EntityNotFoundException("Item not found!")))
-                .flatMap(it -> cartItemRepository.findByItemIdAndOrderIdIsNull(it.getId()))
-                .switchIfEmpty(Mono.error(new EntityNotFoundException("Cart item not found!")))
-                .flatMap(it -> {
-                    if (action == Action.DELETE) return cartItemRepository.deleteByItemId(it.getItemId());
-                    return Mono.empty();
-                });
+        return userService.getCurrentUserId()
+                .flatMap(userId -> processItem(id)
+                        .switchIfEmpty(Mono.error(new EntityNotFoundException("Item not found!")))
+                        .flatMap(item -> cartItemRepository.findByItemIdAndUserIdAndOrderIdIsNull(item.getId(), userId))
+                        .switchIfEmpty(Mono.error(new EntityNotFoundException("Cart item not found!")))
+                        .flatMap(cartItem -> {
+                            if (action == Action.DELETE) return cartItemRepository.deleteByItemIdAndUserId(cartItem.getItemId(), cartItem.getUserId());
+                            return Mono.empty();
+                        })
+                );
     }
 
     private Mono<OrderInfo> processOrder(Long userId, List<CartItem> cartItems, BigDecimal totalSum) {
         Order order = Order.builder()
                 .totalSum(totalSum)
                 .createdAt(LocalDateTime.now())
+                .userId(userId)
                 .build();
 
         Mono<List<CartItemInfo>> cartItemInfosMono = Flux.fromIterable(cartItems)
@@ -133,7 +143,8 @@ public class CartItemServiceImpl implements CartItemService {
                 .flatMap(tuple -> {
                     PaymentResponse paymentResponse = tuple.getT2();
                     if (paymentResponse.getStatus() == PaymentResponse.StatusEnum.FAILED) {
-                        return orderRepository.deleteById(order.getId())
+                        order.setStatus(paymentResponse.getStatus().getValue());
+                        return orderRepository.save(order)
                                 .then(Mono.error(new PaymentProcessException("Order creation failed!")));
                     }
 
@@ -144,15 +155,15 @@ public class CartItemServiceImpl implements CartItemService {
     }
 
     private Mono<Item> processItem(Long id) {
-        return cacheService.getItem(id.toString())
+        return cacheService.get("item", id.toString(), Item.class)
                 .switchIfEmpty(itemRepository.findById(id))
-                .flatMap(item -> cacheService.addItem(item).thenReturn(item));
+                .flatMap(item -> cacheService.save("item", item.getId().toString(), item, Duration.ofMinutes(10)).thenReturn(item));
     }
 
     private Mono<Image> processImage(Long itemId) {
-        return cacheService.getImage(itemId.toString())
+        return cacheService.get("image", itemId.toString(), Image.class)
                 .switchIfEmpty(imageRepository.findByItemId(itemId))
-                .flatMap(image -> cacheService.addImage(itemId.toString(), image).thenReturn(image));
+                .flatMap(image -> cacheService.save("image", itemId.toString(), image, Duration.ofMinutes(10)).thenReturn(image));
     }
 
     private Mono<BigDecimal> calculateTotalSum(List<CartItem> cartItems) {

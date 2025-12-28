@@ -130,9 +130,7 @@ public class ItemRepositoryTest extends BaseRepositoryTest {
         assertNotNull(itemDb);
         assertNotNull(itemDb.getId());
 
-        StepVerifier.create(itemRepository.deleteById(itemDb.getId())
-                        .then(itemRepository.findById(itemDb.getId()))
-                )
+        StepVerifier.create(itemRepository.deleteById(itemDb.getId()).then(itemRepository.findById(itemDb.getId())))
                 .verifyComplete();
     }
 }

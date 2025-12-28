@@ -32,6 +32,17 @@ public class ErrorHandler {
         );
     }
 
+    @ExceptionHandler(EntityConflictException.class)
+    private Mono<ResponseEntity<ErrorResponse>> handleEntityConflictException(final EntityConflictException e) {
+        log.error(e.getMessage(), e);
+        final ErrorResponse errorResponse = new ErrorResponse(e.getMessage(), HttpStatus.CONFLICT.value());
+        return Mono.just(
+                ResponseEntity
+                        .status(HttpStatus.CONFLICT)
+                        .body(errorResponse)
+        );
+    }
+
     @ExceptionHandler(ImportCsvException.class)
     private Mono<ResponseEntity<ErrorResponse>> handleImportCsvException(final ImportCsvException e) {
         log.error(e.getMessage(), e);

@@ -88,9 +88,7 @@ public class ImageRepositoryTest extends BaseRepositoryTest {
         assertNotNull(imageDb);
         assertNotNull(imageDb.getId());
 
-        StepVerifier.create(imageRepository.deleteById(imageDb.getId())
-                        .then(imageRepository.findById(imageDb.getId()))
-                )
+        StepVerifier.create(imageRepository.deleteById(imageDb.getId()).then(imageRepository.findById(imageDb.getId())))
                 .verifyComplete();
     }
 }

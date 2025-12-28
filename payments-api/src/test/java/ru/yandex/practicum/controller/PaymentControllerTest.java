@@ -10,13 +10,12 @@ import ru.yandex.practicum.service.PaymentService;
 import ru.yandex.practicum.server.model.PaymentRequest;
 import ru.yandex.practicum.server.model.PaymentResponse;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.boot.test.autoconfigure.web.reactive.WebFluxTest;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import static org.mockito.Mockito.*;
 
-@WebFluxTest(PaymentController.class)
-public class PaymentControllerTest {
+public class PaymentControllerTest extends BaseControllerTest {
     @Autowired
     private WebTestClient webTestClient;
     @MockitoBean
@@ -43,6 +42,7 @@ public class PaymentControllerTest {
     }
 
     @Test
+    @WithMockUser(username = "Djon")
     void balanceUserIdGet() {
         when(paymentService.processPayment(any(PaymentRequest.class))).thenReturn(Mono.just(paymentResponse));
 

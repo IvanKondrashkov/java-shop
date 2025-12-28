@@ -1,6 +1,7 @@
 package ru.yandex.practicum.service;
 
 import java.util.*;
+import java.time.Duration;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import com.opencsv.bean.CsvToBean;
@@ -17,6 +18,7 @@ import reactor.core.publisher.Mono;
 import ru.yandex.practicum.dto.ItemCsv;
 import ru.yandex.practicum.mapper.ItemMapper;
 import ru.yandex.practicum.mapper.ImageMapper;
+import ru.yandex.practicum.model.Image;
 import ru.yandex.practicum.repository.ItemRepository;
 import ru.yandex.practicum.repository.ImageRepository;
 import ru.yandex.practicum.exception.ImportCsvException;
@@ -70,7 +72,7 @@ public class AdminServiceImpl implements AdminService {
                     return s3Service.uploadImage(fileName, bytes)
                             .map(ImageMapper::imageInfoToImage)
                             .flatMap(imageRepository::save)
-                            .flatMap(cacheService::addImage)
+                            .flatMap(image -> cacheService.save("image", image.getFileName(), image, Duration.ofMinutes(3)))
                             .thenReturn(itemCsv);
                 })
                 .collectList();
@@ -80,7 +82,7 @@ public class AdminServiceImpl implements AdminService {
         return Flux.fromIterable(itemCsvs)
                 .flatMap(itemCsv -> {
                     String fileName = getFileNameS3(itemCsv.getImageBase64());
-                    return cacheService.getImage(fileName)
+                    return cacheService.get("image", fileName, Image.class)
                             .map(image -> ItemMapper.itemCsvToItem(itemCsv, image));
                 })
                 .collectList()

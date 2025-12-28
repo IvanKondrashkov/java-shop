@@ -6,6 +6,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import reactor.core.publisher.Mono;
+import ru.yandex.practicum.model.Balance;
 import ru.yandex.practicum.model.Payment;
 import ru.yandex.practicum.mapper.PaymentMapper;
 import ru.yandex.practicum.repository.BalanceRepository;
@@ -30,22 +31,40 @@ public class PaymentServiceImpl implements PaymentService {
                 .switchIfEmpty(Mono.error(new EntityNotFoundException("User not found!")))
                 .then(balanceRepository.findByUserId(paymentRequest.getUserId()))
                 .switchIfEmpty(Mono.error(new EntityNotFoundException("Balance not found!")))
-                .flatMap(balance -> {
-                    Payment payment = Payment.builder()
-                            .currency(paymentRequest.getCurrency())
-                            .amount(paymentRequest.getAmount())
-                            .status(PaymentResponse.StatusEnum.SUCCESS.getValue())
-                            .createdAt(LocalDateTime.now())
-                            .userId(paymentRequest.getUserId())
-                            .build();
-
-                    if (balance.getBalance().compareTo(paymentRequest.getAmount()) < 0) {
-                        payment.setStatus(PaymentResponse.StatusEnum.FAILED.getValue());
-                        return paymentRepository.save(payment);
-                    }
-                    balance.setBalance(balance.getBalance().subtract(paymentRequest.getAmount()));
-                    return balanceRepository.save(balance).then(paymentRepository.save(payment));
-                })
+                .flatMap(balance -> processWithBalance(balance, paymentRequest))
                 .map(PaymentMapper::paymentToPaymentResponse);
+    }
+
+    private Mono<Payment> processWithBalance(Balance balance, PaymentRequest request) {
+        return hasEnoughFunds(balance, request)
+                ? processSuccessfulPayment(balance, request)
+                : processFailedPayment(request);
+    }
+
+    private boolean hasEnoughFunds(Balance balance, PaymentRequest request) {
+        return balance.getBalance().compareTo(request.getAmount()) >= 0;
+    }
+
+    private Mono<Payment> processFailedPayment(PaymentRequest request) {
+        Payment payment = buildPayment(request, PaymentResponse.StatusEnum.FAILED.getValue());
+        return paymentRepository.save(payment);
+    }
+
+    private Mono<Payment> processSuccessfulPayment(Balance balance, PaymentRequest request) {
+        balance.setBalance(balance.getBalance().subtract(request.getAmount()));
+        Payment payment = buildPayment(request, PaymentResponse.StatusEnum.SUCCESS.getValue());
+
+        return balanceRepository.save(balance)
+                .then(paymentRepository.save(payment));
+    }
+
+    private Payment buildPayment(PaymentRequest request, String status) {
+        return Payment.builder()
+                .currency(request.getCurrency())
+                .amount(request.getAmount())
+                .status(status)
+                .createdAt(LocalDateTime.now())
+                .userId(request.getUserId())
+                .build();
     }
 }

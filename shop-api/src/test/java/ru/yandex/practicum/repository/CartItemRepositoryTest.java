@@ -8,6 +8,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import reactor.test.StepVerifier;
+import ru.yandex.practicum.dto.Role;
+import ru.yandex.practicum.model.User;
 import ru.yandex.practicum.model.Item;
 import ru.yandex.practicum.model.CartItem;
 import static org.junit.jupiter.api.Assertions.*;
@@ -16,8 +18,11 @@ public class CartItemRepositoryTest extends BaseRepositoryTest {
     @Autowired
     private ItemRepository itemRepository;
     @Autowired
+    private UserRepository userRepository;
+    @Autowired
     private CartItemRepository cartItemRepository;
     private Item item;
+    private User user;
     private CartItem cartItem;
 
     @BeforeEach
@@ -27,6 +32,12 @@ public class CartItemRepositoryTest extends BaseRepositoryTest {
                 .description("Portable SSD 1ТБ со скоростью передачи до 1050 МБ/с")
                 .price(BigDecimal.valueOf(14999.00))
                 .build();
+        user = User.builder()
+                .username("Djon")
+                .password("123456")
+                .role(Role.USER.name())
+                .enabled(true)
+                .build();
         cartItem = CartItem.builder()
                 .quantity(1)
                 .build();
@@ -35,14 +46,20 @@ public class CartItemRepositoryTest extends BaseRepositoryTest {
                 .doOnNext(newItem -> cartItem.setItemId(newItem.getId()))
                 .block();
 
+        userRepository.save(user)
+                .doOnNext(newUser -> cartItem.setUserId(newUser.getId()))
+                .block();
+
     }
 
     @AfterEach
     void tearDown() {
         item = null;
+        user = null;
         cartItem = null;
 
         cartItemRepository.deleteAll().block();
+        userRepository.deleteAll().block();
         itemRepository.deleteAll().block();
     }
 
@@ -63,13 +80,13 @@ public class CartItemRepositoryTest extends BaseRepositoryTest {
     }
 
     @Test
-    void findByItemId() {
+    void findByItemIdAndUserIdAndOrderIdIsNull() {
         CartItem cartItemDb = cartItemRepository.save(cartItem).block();
 
         assertNotNull(cartItemDb);
         assertNotNull(cartItemDb.getId());
 
-        StepVerifier.create(cartItemRepository.findByItemIdAndOrderIdIsNull(cartItemDb.getItemId()))
+        StepVerifier.create(cartItemRepository.findByItemIdAndUserIdAndOrderIdIsNull(cartItemDb.getItemId(), cartItemDb.getUserId()))
                 .expectNextMatches(newCartItemDb ->
                         newCartItemDb != null &&
                         newCartItemDb.getId() != null &&
@@ -91,25 +108,25 @@ public class CartItemRepositoryTest extends BaseRepositoryTest {
     }
 
     @Test
-    void findAllByOrderIsNull() {
+    void findAllByOrderIdAndUserId() {
         CartItem cartItemDb = cartItemRepository.save(cartItem).block();
 
         assertNotNull(cartItemDb);
         assertNotNull(cartItemDb.getId());
 
-        StepVerifier.create(cartItemRepository.findAllByOrderIdIsNull().collectList())
+        StepVerifier.create(cartItemRepository.findAllByOrderIdAndUserId(cartItemDb.getOrderId(), cartItemDb.getUserId()).collectList())
                 .expectNextMatches(cartItems -> cartItems != null && cartItems.size() == 1)
                 .verifyComplete();
     }
 
     @Test
-    void findAllByOrderId() {
+    void findAllByUserIdAndOrderIdIsNull() {
         CartItem cartItemDb = cartItemRepository.save(cartItem).block();
 
         assertNotNull(cartItemDb);
         assertNotNull(cartItemDb.getId());
 
-        StepVerifier.create(cartItemRepository.findAllByOrderId(new Random().nextLong()).collectList())
+        StepVerifier.create(cartItemRepository.findAllByUserIdAndOrderIdIsNull(new Random().nextLong()).collectList())
                 .expectNextMatches(List::isEmpty)
                 .verifyComplete();
     }
@@ -129,34 +146,18 @@ public class CartItemRepositoryTest extends BaseRepositoryTest {
         assertNotNull(cartItemDb);
         assertNotNull(cartItemDb.getId());
 
-        StepVerifier.create(cartItemRepository.deleteById(cartItemDb.getId())
-                        .then(cartItemRepository.findById(cartItemDb.getId()))
-                )
+        StepVerifier.create(cartItemRepository.deleteById(cartItemDb.getId()).then(cartItemRepository.findById(cartItemDb.getId())))
                 .verifyComplete();
     }
 
     @Test
-    void deleteByItemId() {
+    void deleteByItemIdAndUserId() {
         CartItem cartItemDb = cartItemRepository.save(cartItem).block();
 
         assertNotNull(cartItemDb);
         assertNotNull(cartItemDb.getId());
 
-        StepVerifier.create(cartItemRepository.deleteByItemId(cartItemDb.getItemId())
-                        .then(cartItemRepository.findById(cartItemDb.getId()))
-                )
-                .verifyComplete();
-    }
-
-    @Test
-    void countAllByItemId() {
-        CartItem cartItemDb = cartItemRepository.save(cartItem).block();
-
-        assertNotNull(cartItemDb);
-        assertNotNull(cartItemDb.getId());
-
-        StepVerifier.create(cartItemRepository.countByItemId(cartItemDb.getItemId()))
-                .expectNext(1)
+        StepVerifier.create(cartItemRepository.deleteByItemIdAndUserId(cartItemDb.getItemId(), cartItemDb.getUserId()).then(cartItemRepository.findById(cartItemDb.getId())))
                 .verifyComplete();
     }
 }

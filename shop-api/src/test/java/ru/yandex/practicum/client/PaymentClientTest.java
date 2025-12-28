@@ -35,9 +35,9 @@ public class PaymentClientTest {
         StepVerifier.create(paymentClient.getBalance(1L))
                 .expectNextMatches(newBalance ->
                         newBalance != null &&
-                                newBalance.getUserId().equals(1L) &&
-                                newBalance.getBalance().compareTo(new BigDecimal("0.0")) == 0 &&
-                                newBalance.getCurrency().equals("RUB")
+                        newBalance.getUserId().equals(1L) &&
+                        newBalance.getBalance().compareTo(new BigDecimal("0.0")) == 0 &&
+                        newBalance.getCurrency().equals("RUB")
                 )
                 .verifyComplete();
 
@@ -59,12 +59,12 @@ public class PaymentClientTest {
         StepVerifier.create(paymentClient.processPayment(any()))
                 .expectNextMatches(newPayment ->
                         newPayment != null &&
-                                newPayment.getPaymentId().equals(1L) &&
-                                newPayment.getUserId().equals(1L) &&
-                                newPayment.getAmount().compareTo(new BigDecimal("10.0")) == 0 &&
-                                newPayment.getCurrency().equals("RUB") &&
-                                newPayment.getStatus().equals(PaymentResponse.StatusEnum.SUCCESS) &&
-                                newPayment.getTimestamp() != null
+                        newPayment.getPaymentId().equals(1L) &&
+                        newPayment.getUserId().equals(1L) &&
+                        newPayment.getAmount().compareTo(new BigDecimal("10.0")) == 0 &&
+                        newPayment.getCurrency().equals("RUB") &&
+                        newPayment.getStatus().equals(PaymentResponse.StatusEnum.SUCCESS) &&
+                        newPayment.getTimestamp() != null
                 )
                 .verifyComplete();
 

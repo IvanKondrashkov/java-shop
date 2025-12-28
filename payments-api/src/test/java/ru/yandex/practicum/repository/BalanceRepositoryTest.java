@@ -6,6 +6,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import reactor.test.StepVerifier;
+import ru.yandex.practicum.dto.Role;
 import ru.yandex.practicum.model.User;
 import ru.yandex.practicum.model.Balance;
 import static org.junit.jupiter.api.Assertions.*;
@@ -21,8 +22,10 @@ public class BalanceRepositoryTest extends BaseRepositoryTest {
     @BeforeEach
     void setUp() {
         user = User.builder()
-                .firstName("Djon")
-                .lastName("Doe")
+                .username("Djon")
+                .password("123456")
+                .role(Role.USER.name())
+                .enabled(true)
                 .build();
         balance = Balance.builder()
                 .currency("RUB")
@@ -106,9 +109,7 @@ public class BalanceRepositoryTest extends BaseRepositoryTest {
         assertNotNull(balanceDb);
         assertNotNull(balanceDb.getId());
 
-        StepVerifier.create(balanceRepository.deleteById(balanceDb.getId())
-                        .then(balanceRepository.findById(balanceDb.getId()))
-                )
+        StepVerifier.create(balanceRepository.deleteById(balanceDb.getId()).then(balanceRepository.findById(balanceDb.getId())))
                 .verifyComplete();
     }
 }

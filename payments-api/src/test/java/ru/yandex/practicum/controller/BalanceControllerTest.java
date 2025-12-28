@@ -7,14 +7,13 @@ import org.junit.jupiter.api.BeforeEach;
 import reactor.core.publisher.Mono;
 import ru.yandex.practicum.service.BalanceService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.boot.test.autoconfigure.web.reactive.WebFluxTest;
 import ru.yandex.practicum.server.model.BalanceResponse;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import static org.mockito.Mockito.*;
 
-@WebFluxTest(BalanceController.class)
-public class BalanceControllerTest {
+public class BalanceControllerTest extends BaseControllerTest {
     @Autowired
     private WebTestClient webTestClient;
     @MockitoBean
@@ -34,6 +33,7 @@ public class BalanceControllerTest {
     }
 
     @Test
+    @WithMockUser(username = "Djon")
     void balanceUserIdGet() {
         when(balanceService.findByUserId(anyLong())).thenReturn(Mono.just(balanceResponse));
 

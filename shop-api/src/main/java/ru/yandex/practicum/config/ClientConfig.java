@@ -1,5 +1,6 @@
 package ru.yandex.practicum.config;
 
+import org.springframework.web.reactive.function.client.WebClient;
 import ru.yandex.practicum.client.ApiClient;
 import ru.yandex.practicum.client.api.BalanceApi;
 import ru.yandex.practicum.client.api.PaymentsApi;
@@ -12,8 +13,8 @@ import ru.yandex.practicum.config.properties.PaymentsApiProperties;
 @EnableConfigurationProperties(PaymentsApiProperties.class)
 public class ClientConfig {
     @Bean
-    public ApiClient paymentApiClient(PaymentsApiProperties paymentsApiProperties) {
-        ApiClient apiClient = new ApiClient();
+    public ApiClient paymentApiClient(PaymentsApiProperties paymentsApiProperties, WebClient oauth2WebClient) {
+        ApiClient apiClient = new ApiClient(oauth2WebClient);
         apiClient.setBasePath(paymentsApiProperties.getUrl());
         return apiClient;
     }

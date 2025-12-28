@@ -29,8 +29,9 @@ public abstract class BaseServiceTest {
             .withInitScripts(
                     "./db/migrations/01-images-create.sql",
                     "./db/migrations/02-items-create.sql",
-                    "./db/migrations/03-orders-create.sql",
-                    "./db/migrations/04-cart-items-create.sql"
+                    "./db/migrations/03-users-create.sql",
+                    "./db/migrations/04-orders-create.sql",
+                    "./db/migrations/05-cart-items-create.sql"
             );
 
     @Container

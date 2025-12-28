@@ -6,6 +6,7 @@ import lombok.extern.slf4j.Slf4j;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.http.codec.multipart.FilePart;
+import org.springframework.security.access.annotation.Secured;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.reactive.result.view.Rendering;
 import reactor.core.publisher.Mono;
@@ -76,12 +77,14 @@ public class ItemController {
         });
     }
 
+    @Secured("ROLE_USER")
     @PostMapping("items/{id}")
     public Mono<Rendering> purchaseItemById(@PathVariable Long id, @ModelAttribute ActionRequest actionRequest) {
         return cartItemService.purchaseItem(id, actionRequest.getAction())
                 .map(RenderingUtils::renderItem);
     }
 
+    @Secured("ROLE_USER")
     @PostMapping("items")
     public Mono<Rendering> purchaseItem(@ModelAttribute ActionRequest actionRequest, @ModelAttribute PageRequest pageRequest) {
         return cartItemService.purchaseItem(actionRequest.getId(), actionRequest.getAction())
@@ -91,6 +94,7 @@ public class ItemController {
                 .map(RenderingUtils::redirectTo);
     }
 
+    @Secured("ROLE_ADMIN")
     @PostMapping(value = "items/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public Mono<Rendering> importCsvFile(@RequestPart FilePart file, @ModelAttribute PageRequest pageRequest) {
         return adminService.importCsvFile(file)

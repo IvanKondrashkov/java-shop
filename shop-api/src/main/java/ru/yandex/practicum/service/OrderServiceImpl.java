@@ -14,34 +14,36 @@ import ru.yandex.practicum.exception.EntityNotFoundException;
 @Transactional
 @RequiredArgsConstructor
 public class OrderServiceImpl implements OrderService {
-    private final CartItemService cartItemService;
     private final OrderRepository orderRepository;
+    private final CartItemService cartItemService;
+    private final UserService userService;
 
     @Override
     @Transactional(readOnly = true)
     public Mono<OrderInfo> findById(Long id) {
-        return orderRepository.findById(id)
+        return userService.getCurrentUserId()
+                .flatMap(userId -> orderRepository.findByIdAndUserId(id, userId))
                 .switchIfEmpty(Mono.error(new EntityNotFoundException("Order not found!")))
-                .flatMap(it ->
-                        cartItemService.findAllByOrderId(it.getId())
-                                .collectList()
-                                .map(cartItems -> OrderMapper.orderToOrderInfo(it, cartItems))
+                .flatMap(order -> cartItemService.findAllByOrderId(order.getId())
+                        .collectList()
+                        .map(cartItems -> OrderMapper.orderToOrderInfo(order, cartItems))
                 );
     }
 
     @Override
     @Transactional(readOnly = true)
     public Flux<OrderInfo> findAll() {
-        return orderRepository.findAll()
-                .flatMap(it ->
-                        cartItemService.findAllByOrderId(it.getId())
-                                .collectList()
-                                .map(cartItems -> OrderMapper.orderToOrderInfo(it, cartItems))
+        return userService.getCurrentUserId()
+                .flatMapMany(orderRepository::findAllByUserId)
+                .flatMap(order -> cartItemService.findAllByOrderId(order.getId())
+                        .collectList()
+                        .map(cartItems -> OrderMapper.orderToOrderInfo(order, cartItems))
                 );
     }
 
     @Override
-    public Mono<OrderInfo> buy(Long userId) {
-        return cartItemService.purchaseOrder(userId);
+    public Mono<OrderInfo> buy() {
+        return userService.getCurrentUserId()
+                .flatMap(cartItemService::purchaseOrder);
     }
 }

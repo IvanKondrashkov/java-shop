@@ -1,0 +1,49 @@
+{
+  "realm": "shop-realm",
+  "enabled": true,
+  "displayName": "Shop Realm",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": false,
+  "clients": [
+    {
+      "clientId": "shop-api",
+      "enabled": true,
+      "publicClient": false,
+      "secret": "shop-api-secret",
+      "redirectUris": ["*"],
+      "webOrigins": ["*"],
+      "serviceAccountsEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "attributes": {
+        "oauth2.device.authorization.grant.enabled": false
+      }
+    },
+    {
+      "clientId": "payments-api",
+      "enabled": true,
+      "publicClient": false,
+      "secret": "payments-api-secret",
+      "redirectUris": ["*"],
+      "webOrigins": ["*"],
+      "serviceAccountsEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false
+    }
+  ],
+  "users": [
+    {
+      "username": "shop-service",
+      "enabled": true,
+      "serviceAccountClientId": "shop-api",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "service-account-password"
+        }
+      ]
+    }
+  ]
+}

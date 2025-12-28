@@ -6,8 +6,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.boot.test.autoconfigure.web.reactive.WebFluxTest;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import ru.yandex.practicum.client.PaymentClient;
 import ru.yandex.practicum.dto.*;
@@ -16,16 +16,18 @@ import reactor.core.publisher.Mono;
 import ru.yandex.practicum.dto.response.ImageInfo;
 import ru.yandex.practicum.dto.response.ItemInfo;
 import ru.yandex.practicum.service.CartItemService;
+import ru.yandex.practicum.service.UserService;
 import static org.mockito.Mockito.*;
 
-@WebFluxTest(CartItemController.class)
-public class CartItemControllerTest {
+public class CartItemControllerTest extends BaseControllerTest {
     @Autowired
     private WebTestClient webTestClient;
     @MockitoBean
     private PaymentClient paymentClient;
     @MockitoBean
     private CartItemService cartItemService;
+    @MockitoBean
+    private UserService userService;
     private ImageInfo imageInfo;
     private ItemInfo itemInfo;
 
@@ -53,7 +55,9 @@ public class CartItemControllerTest {
     }
 
     @Test
+    @WithMockUser(username = "Djon")
     void findAll() {
+        when(userService.getCurrentUserId()).thenReturn(Mono.just(1L));
         when(cartItemService.findAll()).thenReturn(Flux.just(itemInfo));
         when(paymentClient.getBalance(1L)).thenReturn(Mono.empty());
 
@@ -71,12 +75,15 @@ public class CartItemControllerTest {
                     assert html.contains("items");
                 });
 
+        verify(userService, times(1)).getCurrentUserId();
         verify(cartItemService, times(1)).findAll();
         verify(paymentClient, times(1)).getBalance(1L);
     }
 
     @Test
+    @WithMockUser(username = "Djon")
     void purchaseItem() {
+        when(userService.getCurrentUserId()).thenReturn(Mono.just(1L));
         when(cartItemService.purchaseItem(any(), any())).thenReturn(Mono.just(itemInfo));
         when(cartItemService.findAll()).thenReturn(Flux.just(itemInfo));
         when(paymentClient.getBalance(1L)).thenReturn(Mono.empty());
@@ -99,6 +106,7 @@ public class CartItemControllerTest {
                     assert html.contains("items");
                 });
 
+        verify(userService, times(1)).getCurrentUserId();
         verify(cartItemService, times(1)).purchaseItem(any(), any());
         verify(cartItemService, times(1)).findAll();
         verify(paymentClient, times(1)).getBalance(1L);

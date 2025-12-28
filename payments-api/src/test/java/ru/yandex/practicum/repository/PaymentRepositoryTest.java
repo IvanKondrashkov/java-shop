@@ -7,6 +7,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import reactor.test.StepVerifier;
+import ru.yandex.practicum.dto.Role;
 import ru.yandex.practicum.model.User;
 import ru.yandex.practicum.model.Payment;
 import static org.junit.jupiter.api.Assertions.*;
@@ -22,8 +23,10 @@ public class PaymentRepositoryTest extends BaseRepositoryTest {
     @BeforeEach
     void setUp() {
         user = User.builder()
-                .firstName("Djon")
-                .lastName("Doe")
+                .username("Djon")
+                .password("123456")
+                .role(Role.USER.name())
+                .enabled(true)
                 .build();
         payment = Payment.builder()
                 .currency("RUB")
@@ -93,9 +96,7 @@ public class PaymentRepositoryTest extends BaseRepositoryTest {
         assertNotNull(paymentDb);
         assertNotNull(paymentDb.getId());
 
-        StepVerifier.create(paymentRepository.deleteById(paymentDb.getId())
-                        .then(paymentRepository.findById(paymentDb.getId()))
-                )
+        StepVerifier.create(paymentRepository.deleteById(paymentDb.getId()).then(paymentRepository.findById(paymentDb.getId())))
                 .verifyComplete();
     }
 }

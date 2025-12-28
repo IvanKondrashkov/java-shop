@@ -4,16 +4,17 @@ import java.util.List;
 import java.math.BigDecimal;
 import lombok.extern.slf4j.Slf4j;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.annotation.Secured;
+import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
 import ru.yandex.practicum.dto.Action;
 import ru.yandex.practicum.client.PaymentClient;
-import ru.yandex.practicum.dto.request.UserRequest;
 import ru.yandex.practicum.dto.response.ItemInfo;
 import ru.yandex.practicum.dto.request.ActionRequest;
 import ru.yandex.practicum.service.CartItemService;
 import org.springframework.web.reactive.result.view.Rendering;
-import org.springframework.stereotype.Controller;
+import ru.yandex.practicum.service.UserService;
 import ru.yandex.practicum.utils.RenderingUtils;
 
 @Slf4j
@@ -23,9 +24,11 @@ import ru.yandex.practicum.utils.RenderingUtils;
 public class CartItemController {
     private final CartItemService cartItemService;
     private final PaymentClient paymentClient;
+    private final UserService userService;
 
+    @Secured("ROLE_USER")
     @GetMapping
-    public Mono<Rendering> findAll(@ModelAttribute UserRequest userRequest) {
+    public Mono<Rendering> findAll() {
         return cartItemService.findAll()
                 .collectList()
                 .flatMap(items -> {
@@ -33,28 +36,33 @@ public class CartItemController {
                             .map(item -> item.getPrice().multiply(BigDecimal.valueOf(item.getCount())))
                             .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-                    return paymentClient.getBalance(userRequest.getUserId())
-                            .map(balance -> balance.getBalance().compareTo(total) >= 0)
-                            .defaultIfEmpty(false)
-                            .flatMap(isSufficient ->
-                                    RenderingUtils.renderCart(items, total, isSufficient)
+                    return userService.getCurrentUserId()
+                            .flatMap(userId -> paymentClient.getBalance(userId)
+                                    .map(balance -> balance.getBalance().compareTo(total) >= 0)
+                                    .defaultIfEmpty(false)
+                                    .flatMap(isSufficient ->
+                                            RenderingUtils.renderCart(items, total, isSufficient)
+                                    )
                             );
                 });
     }
 
+    @Secured("ROLE_USER")
     @PostMapping
-    public Mono<Rendering> purchaseItem(@ModelAttribute UserRequest userRequest, @ModelAttribute ActionRequest actionRequest) {
+    public Mono<Rendering> purchaseItem(@ModelAttribute ActionRequest actionRequest) {
         return getAction(actionRequest.getId(), actionRequest.getAction())
                 .flatMap(items -> {
                     BigDecimal total = items.stream()
                             .map(item -> item.getPrice().multiply(BigDecimal.valueOf(item.getCount())))
                             .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-                    return paymentClient.getBalance(userRequest.getUserId())
-                            .map(balance -> balance.getBalance().compareTo(total) >= 0)
-                            .defaultIfEmpty(false)
-                            .flatMap(isSufficient ->
-                                    RenderingUtils.renderCart(items, total, isSufficient)
+                    return userService.getCurrentUserId()
+                            .flatMap(userId -> paymentClient.getBalance(userId)
+                                    .map(balance -> balance.getBalance().compareTo(total) >= 0)
+                                    .defaultIfEmpty(false)
+                                    .flatMap(isSufficient ->
+                                            RenderingUtils.renderCart(items, total, isSufficient)
+                                    )
                             );
                 });
     }

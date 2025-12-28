@@ -7,4 +7,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "payments.api")
 public class PaymentsApiProperties {
     private String url;
+    private String clientId;
+    private String clientSecret;
+    private String tokenUri;
 }

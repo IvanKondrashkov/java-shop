@@ -23,4 +23,6 @@ public class Order {
     private String status;
     @Column("created_at")
     private LocalDateTime createdAt;
+    @Column("user_id")
+    private Long userId;
 }
